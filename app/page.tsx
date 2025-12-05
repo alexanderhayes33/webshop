@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
@@ -46,9 +46,17 @@ export default function HomePage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const { addToCart } = useCart();
   const { showAlert } = useAlert();
+  const hasLoadedRef = useRef(false);
+  const isLoadingRef = useRef(false);
 
   useEffect(() => {
+    // ป้องกันการโหลดซ้ำ
+    if (hasLoadedRef.current || isLoadingRef.current) {
+      return;
+    }
+
     async function loadData() {
+      isLoadingRef.current = true;
       setLoading(true);
       
       // โหลดสินค้า
@@ -108,6 +116,8 @@ export default function HomePage() {
       }
 
       setLoading(false);
+      hasLoadedRef.current = true;
+      isLoadingRef.current = false;
     }
 
     loadData();

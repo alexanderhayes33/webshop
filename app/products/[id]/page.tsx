@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
@@ -31,20 +31,32 @@ export default function ProductDetailPage() {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
+  const loadedProductIdRef = useRef<number | null>(null);
+  const isLoadingRef = useRef(false);
 
   useEffect(() => {
-    async function loadProduct() {
-      const id = params.id;
-      if (!id || typeof id !== "string") {
-        router.replace("/products");
-        return;
-      }
+    const id = params.id;
+    if (!id || typeof id !== "string") {
+      router.replace("/products");
+      return;
+    }
 
+    const productId = parseInt(id);
+    
+    // โหลดเฉพาะเมื่อ productId เปลี่ยน หรือยังไม่เคยโหลด
+    if (productId !== loadedProductIdRef.current && !isLoadingRef.current) {
+      loadProduct();
+    }
+
+    async function loadProduct() {
+      if (isLoadingRef.current) return;
+
+      isLoadingRef.current = true;
       setLoading(true);
       const { data, error } = await supabase
         .from("products")
         .select("*")
-        .eq("id", parseInt(id))
+        .eq("id", productId)
         .eq("is_active", true)
         .single();
 
@@ -54,10 +66,10 @@ export default function ProductDetailPage() {
       }
 
       setProduct(data as Product);
+      loadedProductIdRef.current = productId;
       setLoading(false);
+      isLoadingRef.current = false;
     }
-
-    loadProduct();
   }, [params.id, router]);
 
   const handleAddToCart = async () => {

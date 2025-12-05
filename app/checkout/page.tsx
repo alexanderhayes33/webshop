@@ -13,6 +13,8 @@ import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { useAlert } from "@/lib/alert";
 import { supabase } from "@/lib/supabaseClient";
 import Image from "next/image";
+import { PaymentDialog } from "@/components/payment/payment-dialog";
+import { CreditCard, QrCode } from "lucide-react";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -30,6 +32,9 @@ export default function CheckoutPage() {
     address: "",
     notes: ""
   });
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("qrcode");
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [createdOrder, setCreatedOrder] = useState<any>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -170,6 +175,14 @@ export default function CheckoutPage() {
         return;
       }
 
+      if (!selectedPaymentMethod) {
+        await showAlert("กรุณาเลือกช่องทางชำระเงิน", {
+          title: "แจ้งเตือน"
+        });
+        setSaving(false);
+        return;
+      }
+
       const orderNumber = generateOrderNumber();
       const productTotal = getTotalPrice();
       const totalAmount = productTotal + shippingCost;
@@ -237,17 +250,14 @@ export default function CheckoutPage() {
         }
       }
 
-      // ล้างตะกร้า
-      await clearCart();
-
-      await showAlert(
-        `สั่งซื้อสำเร็จ! หมายเลขคำสั่งซื้อ: ${orderNumber}`,
-        {
-          title: "สำเร็จ"
-        }
-      );
-
-      router.push(`/orders/${order.id}`);
+      // บันทึก order เพื่อแสดง payment dialog
+      setCreatedOrder(order);
+      
+      // แสดง payment dialog ทันที
+      setShowPaymentDialog(true);
+      
+      // ล้างตะกร้าหลังจากแสดง payment dialog แล้ว
+      // (จะล้างเมื่อปิด dialog หรือชำระเงินสำเร็จ)
     } catch (error: any) {
       console.error("Error creating order:", error);
       await showAlert("เกิดข้อผิดพลาดในการสั่งซื้อ กรุณาลองใหม่อีกครั้ง", {
@@ -352,8 +362,41 @@ export default function CheckoutPage() {
                 className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </div>
-            <Button type="submit" className="w-full" disabled={saving}>
-              {saving ? "กำลังดำเนินการ..." : "ยืนยันการสั่งซื้อ"}
+            <div className="space-y-2">
+              <Label htmlFor="payment_method">ช่องทางชำระเงิน *</Label>
+              <div className="space-y-2">
+                <label
+                  htmlFor="payment_qrcode"
+                  className="flex items-center gap-3 rounded-lg border p-4 cursor-pointer hover:bg-accent transition-colors"
+                >
+                  <input
+                    type="radio"
+                    id="payment_qrcode"
+                    name="payment_method"
+                    value="qrcode"
+                    checked={selectedPaymentMethod === "qrcode"}
+                    onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+                    className="h-4 w-4"
+                  />
+                  <QrCode className="h-5 w-5 text-primary" />
+                  <div className="flex-1">
+                    <p className="font-medium">QR Code (พร้อมเพย์)</p>
+                    <p className="text-xs text-muted-foreground">
+                      สแกน QR Code เพื่อชำระเงินผ่านแอปธนาคาร
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+            <Button type="submit" className="w-full" disabled={saving} size="lg">
+              {saving ? (
+                "กำลังสร้างคำสั่งซื้อ..."
+              ) : (
+                <>
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  ยืนยันการสั่งซื้อและชำระเงิน
+                </>
+              )}
             </Button>
           </form>
         </div>
@@ -429,6 +472,34 @@ export default function CheckoutPage() {
           </div>
         </div>
       </div>
+
+      {/* Payment Dialog */}
+      {createdOrder && selectedPaymentMethod === "qrcode" && (
+        <PaymentDialog
+          open={showPaymentDialog}
+          onOpenChange={(open) => {
+            setShowPaymentDialog(open);
+            if (!open) {
+              // ล้างตะกร้าเมื่อปิด dialog
+              clearCart();
+              router.push(`/orders/${createdOrder.id}`);
+            }
+          }}
+          orderId={createdOrder.order_number}
+          amount={createdOrder.total_amount}
+          userId={user.id}
+          bankAccount={{
+            accountName: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME || "",
+            accountNo: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NO || "",
+            bankCode: process.env.NEXT_PUBLIC_BANK_CODE || "KBANK"
+          }}
+          onPaymentSuccess={() => {
+            // ล้างตะกร้าเมื่อชำระเงินสำเร็จ
+            clearCart();
+            router.push(`/orders/${createdOrder.id}`);
+          }}
+        />
+      )}
     </div>
   );
 }

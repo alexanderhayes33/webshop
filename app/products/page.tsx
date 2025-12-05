@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,8 @@ export default function ProductsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const { addToCart } = useCart();
   const { showAlert } = useAlert();
+  const loadedCategoryIdRef = useRef<number | null | undefined>(undefined);
+  const isLoadingRef = useRef(false);
 
   // คำนวณ price range จากสินค้าทั้งหมด
   const priceRange = useMemo(() => {
@@ -71,7 +73,13 @@ export default function ProductsPage() {
   }, [priceRange]);
 
   useEffect(() => {
+    // ป้องกันการโหลดซ้ำถ้า categoryId เดิม
+    if (loadedCategoryIdRef.current === selectedCategoryId && !isLoadingRef.current) {
+      return;
+    }
+
     async function loadProducts() {
+      isLoadingRef.current = true;
       setLoading(true);
       let query = supabase
         .from("products")
@@ -89,7 +97,9 @@ export default function ProductsPage() {
       } else {
         setAllProducts((data as Product[]) || []);
       }
+      loadedCategoryIdRef.current = selectedCategoryId;
       setLoading(false);
+      isLoadingRef.current = false;
     }
 
     loadProducts();

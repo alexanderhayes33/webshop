@@ -5,13 +5,15 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link";
 import Image from "next/image";
 import { Package, Truck, CheckCircle, Clock, XCircle, MapPin, Phone, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderTimeline } from "@/components/orders/order-timeline";
+import { PaymentDialog } from "@/components/payment/payment-dialog";
+import { CreditCard } from "lucide-react";
 
 type Order = {
   id: number;
@@ -101,6 +103,9 @@ export default function OrderDetailPage() {
   const [items, setItems] = useState<OrderItem[]>([]);
   const [statusHistory, setStatusHistory] = useState<StatusHistory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const loadedOrderIdRef = useRef<number | null>(null);
+  const isLoadingRef = useRef(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -110,16 +115,27 @@ export default function OrderDetailPage() {
 
   useEffect(() => {
     if (user && params.id) {
+      const orderId = parseInt(params.id as string);
+      // โหลดเฉพาะเมื่อ orderId เปลี่ยน หรือยังไม่เคยโหลด
+      if (orderId !== loadedOrderIdRef.current && !isLoadingRef.current) {
       loadOrder();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, params.id]);
 
   async function loadOrder() {
     if (!user || !params.id) return;
-    setLoading(true);
 
     const orderId = parseInt(params.id as string);
+    
+    // ป้องกันการโหลดซ้ำ
+    if (loadedOrderIdRef.current === orderId && !isLoadingRef.current) {
+      return;
+    }
+
+    isLoadingRef.current = true;
+    setLoading(true);
 
     const [orderResult, itemsResult, historyResult] = await Promise.all([
       supabase
@@ -156,7 +172,9 @@ export default function OrderDetailPage() {
     setOrder(orderResult.data as Order);
     setItems((itemsResult.data as OrderItem[]) || []);
     setStatusHistory((historyResult.data as StatusHistory[]) || []);
+    loadedOrderIdRef.current = orderId;
     setLoading(false);
+    isLoadingRef.current = false;
   }
 
   if (authLoading || loading) {
@@ -340,11 +358,42 @@ export default function OrderDetailPage() {
               </div>
             </div>
           </div>
-          <Button variant="outline" className="mt-4 w-full" asChild>
+          
+          {order.status === "pending" && (
+            <Button
+              className="mt-4 w-full"
+              onClick={() => setShowPaymentDialog(true)}
+            >
+              <CreditCard className="mr-2 h-4 w-4" />
+              ชำระเงินผ่าน QR Code
+            </Button>
+          )}
+          
+          <Button variant="outline" className="mt-2 w-full" asChild>
             <Link href="/orders">กลับไปประวัติคำสั่งซื้อ</Link>
           </Button>
         </div>
       </div>
+
+      {/* Payment Dialog */}
+      {order.status === "pending" && user && (
+        <PaymentDialog
+          key={order.order_number}
+          open={showPaymentDialog}
+          onOpenChange={setShowPaymentDialog}
+          orderId={order.order_number}
+          amount={order.total_amount}
+          userId={user.id}
+          bankAccount={{
+            accountName: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME || "",
+            accountNo: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NO || "",
+            bankCode: process.env.NEXT_PUBLIC_BANK_CODE || "KBANK"
+          }}
+          onPaymentSuccess={() => {
+            loadOrder();
+          }}
+        />
+      )}
     </div>
   );
 }

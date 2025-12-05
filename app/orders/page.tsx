@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link";
 import { Package, Truck, CheckCircle, Clock, XCircle } from "lucide-react";
@@ -76,6 +76,8 @@ export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [fetching, setFetching] = useState(true);
+  const loadedUserIdRef = useRef<string | null>(null);
+  const isLoadingRef = useRef(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -85,13 +87,23 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (user) {
+      // โหลดเฉพาะเมื่อ userId เปลี่ยน หรือยังไม่เคยโหลด
+      if (user.id !== loadedUserIdRef.current && !isLoadingRef.current) {
       loadOrders();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   async function loadOrders() {
     if (!user) return;
+    
+    // ป้องกันการโหลดซ้ำ
+    if (loadedUserIdRef.current === user.id && !isLoadingRef.current) {
+      return;
+    }
+
+    isLoadingRef.current = true;
     setFetching(true);
     const { data, error } = await supabase
       .from("orders")
@@ -104,7 +116,9 @@ export default function OrdersPage() {
     } else {
       setOrders((data as Order[]) || []);
     }
+    loadedUserIdRef.current = user.id;
     setFetching(false);
+    isLoadingRef.current = false;
   }
 
   if (loading || fetching) {
