@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { useAlert } from "@/lib/alert";
-import { Package, Truck, CheckCircle, Clock, XCircle, Search, X } from "lucide-react";
+import { Package, Truck, CheckCircle, Clock, XCircle, Search, X, User, Phone, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 
@@ -194,14 +194,6 @@ export default function AdminOrdersPage() {
     });
   }
 
-  function toggleSelectAll() {
-    if (selectedOrders.size === filteredOrders.length) {
-      setSelectedOrders(new Set());
-    } else {
-      setSelectedOrders(new Set(filteredOrders.map((o) => o.id)));
-    }
-  }
-
   async function handleBulkAction() {
     if (selectedOrders.size === 0) {
       await showAlert("กรุณาเลือกออเดอร์ที่ต้องการจัดการ", {
@@ -298,6 +290,14 @@ export default function AdminOrdersPage() {
       (order.tracking_number?.toLowerCase().includes(query) ?? false)
     );
   });
+
+  function toggleSelectAll() {
+    if (selectedOrders.size === filteredOrders.length) {
+      setSelectedOrders(new Set());
+    } else {
+      setSelectedOrders(new Set(filteredOrders.map((o) => o.id)));
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -536,23 +536,63 @@ export default function AdminOrdersPage() {
           )}
         </div>
 
-        {/* ฟอร์มอัปเดตสถานะ */}
-        <div className="rounded-2xl border bg-card p-4 shadow-sm">
-          {selectedOrder ? (
-            <>
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold">อัปเดตสถานะ</h2>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 text-[11px]"
-                  onClick={cancelEdit}
-                >
-                  ยกเลิก
-                </Button>
-              </div>
+        {/* ข้อมูลลูกค้าและฟอร์มอัปเดตสถานะ */}
+        <div className="space-y-4">
+          {/* ข้อมูลลูกค้า */}
+          {selectedOrder && (
+            <div className="rounded-2xl border bg-card p-4 shadow-sm">
+              <h2 className="mb-3 text-sm font-semibold">ข้อมูลลูกค้า</h2>
               <div className="space-y-3">
+                <div className="flex items-start gap-2">
+                  <User className="h-4 w-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-muted-foreground">ชื่อผู้รับ</p>
+                    <p className="text-sm font-medium break-words">{selectedOrder.shipping_name}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Phone className="h-4 w-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-muted-foreground">เบอร์โทรศัพท์</p>
+                    <p className="text-sm font-medium">{selectedOrder.shipping_phone}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-muted-foreground">ที่อยู่จัดส่ง</p>
+                    <p className="text-sm font-medium whitespace-pre-line break-words">
+                      {selectedOrder.shipping_address}
+                    </p>
+                  </div>
+                </div>
+                {selectedOrder.notes && (
+                  <div className="pt-2 border-t">
+                    <p className="text-xs text-muted-foreground mb-1">หมายเหตุ</p>
+                    <p className="text-sm whitespace-pre-line break-words">{selectedOrder.notes}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ฟอร์มอัปเดตสถานะ */}
+          <div className="rounded-2xl border bg-card p-4 shadow-sm">
+            {selectedOrder ? (
+              <>
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-sm font-semibold">อัปเดตสถานะ</h2>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-[11px]"
+                    onClick={cancelEdit}
+                  >
+                    ยกเลิก
+                  </Button>
+                </div>
+                <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="status" className="text-xs">
                     สถานะ
@@ -636,6 +676,7 @@ export default function AdminOrdersPage() {
               </p>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>
