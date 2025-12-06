@@ -30,19 +30,76 @@ export function CategoriesSidebar({
   useEffect(() => {
     async function loadCategories() {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("categories")
-        .select("id, name, slug, is_active")
-        .eq("is_active", true)
-        .order("name", { ascending: true });
+      
+      try {
+        // ดึงหมวดหมู่ที่มีสินค้าอยู่จริง (active products)
+        // ใช้ inner join เพื่อดึงเฉพาะหมวดหมู่ที่มีสินค้า
+        const { data: categoriesData, error: categoriesError } = await supabase
+          .from("categories")
+          .select(`
+            id,
+            name,
+            slug,
+            is_active,
+            products!inner(id)
+          `)
+          .eq("is_active", true)
+          .eq("products.is_active", true);
 
-      if (error) {
+        if (categoriesError) {
+          // ถ้า inner join ไม่ทำงาน ใช้วิธีดึงแยก
+          const { data: allCategories, error: catError } = await supabase
+            .from("categories")
+            .select("id, name, slug, is_active")
+            .eq("is_active", true)
+            .order("name", { ascending: true });
+
+          if (catError) {
+            console.error("Error loading categories:", catError);
+            setCategories([]);
+            return;
+          }
+
+          // ดึงสินค้าทั้งหมดที่มี active
+          const { data: productsData } = await supabase
+            .from("products")
+            .select("category_id")
+            .eq("is_active", true);
+
+          // หา category_id ที่มีสินค้า
+          const categoryIdsWithProducts = new Set(
+            (productsData || [])
+              .map((p: any) => p.category_id)
+              .filter((id: any) => id !== null)
+          );
+
+          // กรองเฉพาะหมวดหมู่ที่มีสินค้า
+          const filteredCategories = (allCategories || []).filter((cat: any) =>
+            categoryIdsWithProducts.has(cat.id)
+          );
+
+          setCategories(filteredCategories as Category[]);
+        } else {
+          // กรองเฉพาะหมวดหมู่ที่มีสินค้า (unique categories)
+          const uniqueCategories = new Map<number, Category>();
+          (categoriesData || []).forEach((item: any) => {
+            if (!uniqueCategories.has(item.id)) {
+              uniqueCategories.set(item.id, {
+                id: item.id,
+                name: item.name,
+                slug: item.slug,
+                is_active: item.is_active
+              });
+            }
+          });
+          setCategories(Array.from(uniqueCategories.values()));
+        }
+      } catch (error) {
         console.error("Error loading categories:", error);
         setCategories([]);
-      } else {
-        setCategories((data as Category[]) || []);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
 
     loadCategories();

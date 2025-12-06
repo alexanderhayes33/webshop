@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAlert } from "@/lib/alert";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { Search, X, Edit } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type Product = {
   id: number;
@@ -47,6 +48,7 @@ export default function AdminProductsPage() {
   });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
   const [bulkEditForm, setBulkEditForm] = useState({
@@ -60,7 +62,7 @@ export default function AdminProductsPage() {
     async function load() {
       setFetching(true);
       const [productsResult, categoriesResult] = await Promise.all([
-        supabase.from("products").select("*").order("id", { ascending: true }),
+        supabase.from("products").select("*").order("created_at", { ascending: false }),
         supabase
           .from("categories")
           .select("id, name, slug, is_active")
@@ -340,8 +342,16 @@ export default function AdminProductsPage() {
     }
   }
 
-  // Filter products based on search query
+  // Filter products based on search query and category
   const filteredProducts = products.filter((product) => {
+    // Filter by category
+    if (selectedCategoryId !== null) {
+      if (product.category_id !== selectedCategoryId) {
+        return false;
+      }
+    }
+
+    // Filter by search query
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -369,6 +379,60 @@ export default function AdminProductsPage() {
           e‑commerce เบื้องต้น
         </p>
       </section>
+
+      {/* Category Filter Buttons */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+            หมวดหมู่:
+          </span>
+          {fetching ? (
+            <div className="flex gap-2">
+              <Skeleton className="h-8 w-20" />
+              <Skeleton className="h-8 w-24" />
+              <Skeleton className="h-8 w-20" />
+            </div>
+          ) : (
+            <>
+              <Button
+                variant={selectedCategoryId === null ? "default" : "outline"}
+                size="sm"
+                className={cn(
+                  "h-8 text-xs",
+                  selectedCategoryId === null && "bg-primary text-primary-foreground"
+                )}
+                onClick={() => setSelectedCategoryId(null)}
+              >
+                ทั้งหมด
+              </Button>
+              {categories.map((category) => (
+                <Button
+                  key={category.id}
+                  variant={selectedCategoryId === category.id ? "default" : "outline"}
+                  size="sm"
+                  className={cn(
+                    "h-8 text-xs",
+                    selectedCategoryId === category.id && "bg-primary text-primary-foreground"
+                  )}
+                  onClick={() => setSelectedCategoryId(category.id)}
+                >
+                  {category.name}
+                </Button>
+              ))}
+              {selectedCategoryId !== null && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 text-xs"
+                  onClick={() => setSelectedCategoryId(null)}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
 
       <section className="grid gap-6 md:grid-cols-[minmax(0,1.5fr),minmax(0,1fr)]">
         {/* ตารางสินค้า */}
@@ -431,7 +495,7 @@ export default function AdminProductsPage() {
                         className="h-4 w-4 rounded border-gray-300"
                       />
                     </th>
-                    <th className="px-2 py-2">ID</th>
+                    <th className="px-2 py-2 w-12">ลำดับ</th>
                     <th className="px-2 py-2">ชื่อสินค้า</th>
                     <th className="px-2 py-2">ราคา</th>
                     <th className="px-2 py-2">สต็อก</th>
@@ -440,7 +504,7 @@ export default function AdminProductsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredProducts.map((product) => (
+                  {filteredProducts.map((product, index) => (
                     <tr
                       key={product.id}
                       className="border-b last:border-0 hover:bg-muted/30"
@@ -453,8 +517,8 @@ export default function AdminProductsPage() {
                           className="h-4 w-4 rounded border-gray-300"
                         />
                       </td>
-                      <td className="px-2 py-2 text-[11px] text-muted-foreground">
-                        {product.id}
+                      <td className="px-2 py-2 text-[11px] text-muted-foreground text-center">
+                        {index + 1}
                       </td>
                       <td className="px-2 py-2">{product.name}</td>
                       <td className="px-2 py-2">

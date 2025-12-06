@@ -10,7 +10,7 @@ import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { CategoriesSidebar } from "@/components/products/categories-sidebar";
 import { ProductFilters } from "@/components/products/product-filters";
 import { cn } from "@/lib/utils";
-import { ShoppingCart, Plus } from "lucide-react";
+import { ShoppingCart, Plus, X } from "lucide-react";
 import { useCart } from "@/components/cart/cart-provider";
 import { useAlert } from "@/lib/alert";
 
@@ -33,9 +33,18 @@ type FilterOptions = {
   stockFilter: "all" | "in_stock" | "out_of_stock";
 };
 
+type Category = {
+  id: number;
+  name: string;
+  slug: string;
+  is_active: boolean;
+};
+
 export default function ProductsPage() {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -60,6 +69,53 @@ export default function ProductsPage() {
     sortBy: "newest",
     stockFilter: "all"
   });
+
+  // โหลดหมวดหมู่
+  useEffect(() => {
+    async function loadCategories() {
+      setCategoriesLoading(true);
+      try {
+        const { data: allCategories, error: catError } = await supabase
+          .from("categories")
+          .select("id, name, slug, is_active")
+          .eq("is_active", true)
+          .order("name", { ascending: true });
+
+        if (catError) {
+          console.error("Error loading categories:", catError);
+          setCategories([]);
+          return;
+        }
+
+        // ดึงสินค้าทั้งหมดที่มี active
+        const { data: productsData } = await supabase
+          .from("products")
+          .select("category_id")
+          .eq("is_active", true);
+
+        // หา category_id ที่มีสินค้า
+        const categoryIdsWithProducts = new Set(
+          (productsData || [])
+            .map((p: any) => p.category_id)
+            .filter((id: any) => id !== null)
+        );
+
+        // กรองเฉพาะหมวดหมู่ที่มีสินค้า
+        const filteredCategories = (allCategories || []).filter((cat: any) =>
+          categoryIdsWithProducts.has(cat.id)
+        );
+
+        setCategories(filteredCategories as Category[]);
+      } catch (error) {
+        console.error("Error loading categories:", error);
+        setCategories([]);
+      } finally {
+        setCategoriesLoading(false);
+      }
+    }
+
+    loadCategories();
+  }, []);
 
   // อัพเดท filters เมื่อ priceRange เปลี่ยน
   useEffect(() => {
@@ -157,6 +213,60 @@ export default function ProductsPage() {
           สินค้าทั้งหมด
         </h1>
       </section>
+
+      {/* Category Filter Buttons */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+            หมวดหมู่:
+          </span>
+          {categoriesLoading ? (
+            <div className="flex gap-2">
+              <Skeleton className="h-8 w-20" />
+              <Skeleton className="h-8 w-24" />
+              <Skeleton className="h-8 w-20" />
+            </div>
+          ) : (
+            <>
+              <Button
+                variant={selectedCategoryId === null ? "default" : "outline"}
+                size="sm"
+                className={cn(
+                  "h-8 text-xs",
+                  selectedCategoryId === null && "bg-primary text-primary-foreground"
+                )}
+                onClick={() => setSelectedCategoryId(null)}
+              >
+                ทั้งหมด
+              </Button>
+              {categories.map((category) => (
+                <Button
+                  key={category.id}
+                  variant={selectedCategoryId === category.id ? "default" : "outline"}
+                  size="sm"
+                  className={cn(
+                    "h-8 text-xs",
+                    selectedCategoryId === category.id && "bg-primary text-primary-foreground"
+                  )}
+                  onClick={() => setSelectedCategoryId(category.id)}
+                >
+                  {category.name}
+                </Button>
+              ))}
+              {selectedCategoryId !== null && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 text-xs"
+                  onClick={() => setSelectedCategoryId(null)}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar - Categories & Filters */}

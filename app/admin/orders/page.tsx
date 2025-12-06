@@ -576,23 +576,23 @@ export default function AdminOrdersPage() {
             </div>
           )}
 
-          {/* ฟอร์มอัปเดตสถานะ */}
-          <div className="rounded-2xl border bg-card p-4 shadow-sm">
-            {selectedOrder ? (
-              <>
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-sm font-semibold">อัปเดตสถานะ</h2>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-[11px]"
-                    onClick={cancelEdit}
-                  >
-                    ยกเลิก
-                  </Button>
-                </div>
-                <div className="space-y-3">
+        {/* ฟอร์มอัปเดตสถานะ */}
+        <div className="rounded-2xl border bg-card p-4 shadow-sm">
+          {selectedOrder ? (
+            <>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold">อัปเดตสถานะ</h2>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-[11px]"
+                  onClick={cancelEdit}
+                >
+                  ยกเลิก
+                </Button>
+              </div>
+              <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="status" className="text-xs">
                     สถานะ
