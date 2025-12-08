@@ -109,9 +109,16 @@ export function BlogList({
                   {post.title}
                 </h3>
                 {post.content && (
-                  <p className="text-xs text-muted-foreground line-clamp-3">
-                    {post.content}
-                  </p>
+                  <p
+                    className="text-xs text-muted-foreground line-clamp-3"
+                    dangerouslySetInnerHTML={{
+                      __html: post.content
+                        .replace(/\\r\\n/g, "<br />")
+                        .replace(/\\n/g, "<br />")
+                        .replace(/\r\n/g, "<br />")
+                        .replace(/\n/g, "<br />")
+                    }}
+                  />
                 )}
                 <div className="mt-auto inline-flex items-center gap-1 text-xs font-medium text-primary">
                   อ่านต่อ

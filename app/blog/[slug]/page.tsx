@@ -103,7 +103,11 @@ export default function BlogDetailPage() {
         <article
           className="prose prose-sm sm:prose-base dark:prose-invert max-w-none"
           dangerouslySetInnerHTML={{
-            __html: post.content.replace(/\n/g, "<br />")
+            __html: post.content
+              .replace(/\\r\\n/g, "<br />")
+              .replace(/\\n/g, "<br />")
+              .replace(/\r\n/g, "<br />")
+              .replace(/\n/g, "<br />")
           }}
         />
       ) : (
