@@ -100,11 +100,12 @@ export default function BlogDetailPage() {
         </div>
       )}
       {post.content ? (
-        <article className="prose prose-sm sm:prose-base dark:prose-invert max-w-none">
-          {post.content.split("\n").map((line, idx) => (
-            <p key={idx}>{line}</p>
-          ))}
-        </article>
+        <article
+          className="prose prose-sm sm:prose-base dark:prose-invert max-w-none"
+          dangerouslySetInnerHTML={{
+            __html: post.content.replace(/\n/g, "<br />")
+          }}
+        />
       ) : (
         <p className="text-sm text-muted-foreground">ไม่มีเนื้อหา</p>
       )}
