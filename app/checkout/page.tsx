@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-provider";
 import { useCart } from "@/components/cart/cart-provider";
@@ -15,6 +15,18 @@ import { supabase } from "@/lib/supabaseClient";
 import Image from "next/image";
 import { PaymentDialog } from "@/components/payment/payment-dialog";
 import { CreditCard, QrCode } from "lucide-react";
+
+type Promotion = {
+  id: number;
+  title: string;
+  description: string | null;
+  promo_code: string | null;
+  discount_percent: number | null;
+  min_purchase_amount: number | null;
+  is_active: boolean;
+  start_date: string | null;
+  end_date: string | null;
+};
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -35,6 +47,10 @@ export default function CheckoutPage() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("qrcode");
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<any>(null);
+  const [promoCodeInput, setPromoCodeInput] = useState("");
+  const [appliedPromotion, setAppliedPromotion] = useState<Promotion | null>(null);
+  const [applyingPromo, setApplyingPromo] = useState(false);
+  const [promoMessage, setPromoMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -127,10 +143,84 @@ export default function CheckoutPage() {
     return null;
   }
 
+  const productTotal = getTotalPrice();
+  const discountAmount =
+    appliedPromotion?.discount_percent && appliedPromotion.discount_percent > 0
+      ? Math.max(0, (productTotal * appliedPromotion.discount_percent) / 100)
+      : 0;
+  const payableAmount = Math.max(productTotal - discountAmount, 0) + shippingCost;
+
   const generateOrderNumber = () => {
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 1000);
     return `ORD-${timestamp}-${random}`;
+  };
+
+  const applyPromotion = async () => {
+    if (!promoCodeInput.trim()) {
+      await showAlert("กรุณากรอกรหัสโปรโมชัน", { title: "แจ้งเตือน" });
+      return;
+    }
+
+    setApplyingPromo(true);
+    setPromoMessage(null);
+    try {
+      const code = promoCodeInput.trim();
+      const { data, error } = await supabase
+        .from("promotions")
+        .select("*")
+        .eq("is_active", true)
+        .ilike("promo_code", code)
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) {
+        setAppliedPromotion(null);
+        setPromoMessage("ไม่พบรหัสโปรโมชันนี้");
+        return;
+      }
+
+      const promo = data as Promotion;
+      const now = new Date();
+      const startDate = promo.start_date ? new Date(promo.start_date) : null;
+      const endDate = promo.end_date ? new Date(promo.end_date) : null;
+
+      if (
+        (startDate && startDate > now) ||
+        (endDate && endDate < now) ||
+        !promo.is_active
+      ) {
+        setAppliedPromotion(null);
+        setPromoMessage("รหัสนี้หมดอายุหรือปิดใช้งานแล้ว");
+        return;
+      }
+
+      if (promo.min_purchase_amount && productTotal < promo.min_purchase_amount) {
+        setAppliedPromotion(null);
+        setPromoMessage(
+          `ต้องมียอดซื้อขั้นต่ำ ฿${Number(promo.min_purchase_amount).toLocaleString(
+            "th-TH"
+          )}`
+        );
+        return;
+      }
+
+      if (!promo.discount_percent || promo.discount_percent <= 0) {
+        setAppliedPromotion(null);
+        setPromoMessage("รหัสนี้ไม่มีส่วนลดที่รองรับ");
+        return;
+      }
+
+      setAppliedPromotion(promo);
+      setPromoMessage("ใช้รหัสโปรโมชันเรียบร้อยแล้ว");
+    } catch (err) {
+      console.error("apply promo error", err);
+      setAppliedPromotion(null);
+      setPromoMessage("ไม่สามารถใช้รหัสได้ กรุณาลองอีกครั้ง");
+    } finally {
+      setApplyingPromo(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -183,9 +273,23 @@ export default function CheckoutPage() {
         return;
       }
 
+      if (
+        appliedPromotion &&
+        appliedPromotion.min_purchase_amount &&
+        productTotal < appliedPromotion.min_purchase_amount
+      ) {
+        await showAlert(
+          `ยอดสั่งซื้อไม่ถึงขั้นต่ำ ฿${Number(
+            appliedPromotion.min_purchase_amount
+          ).toLocaleString("th-TH")} สำหรับโค้ดนี้`,
+          { title: "แจ้งเตือน" }
+        );
+        setSaving(false);
+        return;
+      }
+
       const orderNumber = generateOrderNumber();
-      const productTotal = getTotalPrice();
-      const totalAmount = productTotal + shippingCost;
+      const totalAmount = payableAmount;
 
       // สร้าง order
       const { data: order, error: orderError } = await supabase
@@ -405,6 +509,61 @@ export default function CheckoutPage() {
         <div className="rounded-2xl border bg-card p-6 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold">สรุปคำสั่งซื้อ</h2>
           <div className="space-y-4">
+            <div className="space-y-2 rounded-lg border bg-background/60 p-3">
+              <div className="flex items-center justify-between text-sm font-medium">
+                <span>รหัสโปรโมชัน</span>
+                {appliedPromotion && (
+                  <span className="text-xs text-emerald-600 dark:text-emerald-300">
+                    ใช้แล้ว: {appliedPromotion.promo_code}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Input
+                  value={promoCodeInput}
+                  onChange={(e) => setPromoCodeInput(e.target.value)}
+                  placeholder="กรอกรหัสโปรโมชัน"
+                  className="h-10"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="sm:w-28"
+                    onClick={applyPromotion}
+                    disabled={applyingPromo}
+                  >
+                    {applyingPromo ? "กำลังตรวจสอบ..." : "ใช้โค้ด"}
+                  </Button>
+                  {appliedPromotion && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="sm:w-24"
+                      onClick={() => {
+                        setAppliedPromotion(null);
+                        setPromoMessage(null);
+                      }}
+                    >
+                      ยกเลิก
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {applyingPromo && <Skeleton className="h-2 w-32" />}
+              {promoMessage && (
+                <p
+                  className={`text-xs ${
+                    promoMessage.includes("เรียบร้อย")
+                      ? "text-emerald-600 dark:text-emerald-300"
+                      : "text-destructive"
+                  }`}
+                >
+                  {promoMessage}
+                </p>
+              )}
+            </div>
             <div className="space-y-2">
               {items.map((item) => (
                 <div
@@ -445,9 +604,21 @@ export default function CheckoutPage() {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">ยอดรวมสินค้า</span>
                 <span className="font-medium">
-                  ฿{getTotalPrice().toLocaleString("th-TH")}
+                  ฿{productTotal.toLocaleString("th-TH")}
                 </span>
               </div>
+              {appliedPromotion && discountAmount > 0 && (
+                <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-300">
+                  <span>ส่วนลด ({appliedPromotion.promo_code})</span>
+                  <span>
+                    -฿
+                    {discountAmount.toLocaleString("th-TH", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    })}
+                  </span>
+                </div>
+              )}
               {selectedShippingMethod && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">ค่าจัดส่ง</span>
@@ -462,7 +633,7 @@ export default function CheckoutPage() {
               <div className="flex justify-between border-t pt-2 text-sm">
                 <span className="font-semibold">ยอดรวมทั้งหมด</span>
                 <span className="text-lg font-semibold text-primary">
-                  ฿{(getTotalPrice() + shippingCost).toLocaleString("th-TH", {
+                  ฿{payableAmount.toLocaleString("th-TH", {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2
                   })}

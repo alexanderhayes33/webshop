@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAlert } from "@/lib/alert";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
-import { Search, X, Plus } from "lucide-react";
+import {
+  Search,
+  X,
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+  Sparkles
+} from "lucide-react";
 
 type Promotion = {
   id: number;
@@ -42,10 +49,73 @@ export default function AdminPromotionsPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [sliderIndex, setSliderIndex] = useState(0);
+
+  const mockPromotions: Promotion[] = useMemo(
+    () => [
+      {
+        id: 0,
+        title: "โปรเปิดร้าน ลด 20% ทุกออเดอร์",
+        description: "โค้ดส่วนลด DEMO20 ใช้ได้กับสินค้าทุกชิ้น",
+        promo_code: "DEMO20",
+        discount_percent: 20,
+        min_purchase_amount: 0,
+        is_active: true,
+        start_date: null,
+        end_date: null,
+        created_at: "",
+        updated_at: ""
+      },
+      {
+        id: 1,
+        title: "ซื้อครบ 1,500.- ลดเพิ่ม 200.-",
+        description: "ใส่โค้ด BONUS200 สำหรับบิลใหญ่คุ้มๆ",
+        promo_code: "BONUS200",
+        discount_percent: null,
+        min_purchase_amount: 1500,
+        is_active: true,
+        start_date: null,
+        end_date: null,
+        created_at: "",
+        updated_at: ""
+      },
+      {
+        id: 2,
+        title: "สมาชิกใหม่ รับส่วนลด 15%",
+        description: "สมัครสมาชิกวันนี้ ใช้โค้ด NEWBIE15",
+        promo_code: "NEWBIE15",
+        discount_percent: 15,
+        min_purchase_amount: 500,
+        is_active: true,
+        start_date: null,
+        end_date: null,
+        created_at: "",
+        updated_at: ""
+      }
+    ],
+    []
+  );
 
   useEffect(() => {
     loadPromotions();
   }, []);
+
+  const sliderPromotions = useMemo(() => {
+    if (promotions.length === 0) return mockPromotions;
+    return promotions;
+  }, [promotions, mockPromotions]);
+
+  useEffect(() => {
+    if (sliderPromotions.length < 2) return;
+    const timer = setInterval(() => {
+      setSliderIndex((prev) => (prev + 1) % Math.max(sliderPromotions.length, 1));
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [sliderPromotions.length]);
+
+  useEffect(() => {
+    setSliderIndex(0);
+  }, [sliderPromotions.length]);
 
   async function loadPromotions() {
     setFetching(true);
@@ -230,6 +300,131 @@ export default function AdminPromotionsPage() {
             <Plus className="h-4 w-4" />
             เพิ่มโปรโมชัน
           </Button>
+        </div>
+
+        <div className="rounded-2xl border bg-card/80 p-4 shadow-sm backdrop-blur">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <span>พรีวิวสไลด์โปรโมชัน (แสดงล่าสุด/สมมุติ)</span>
+            </div>
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <span className="hidden sm:inline">สลับดูหลายโปรโมชัน</span>
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() =>
+                    setSliderIndex((prev) =>
+                      (prev - 1 + sliderPromotions.length) %
+                      Math.max(sliderPromotions.length, 1)
+                    )
+                  }
+                  disabled={sliderPromotions.length === 0}
+                  aria-label="สไลด์ก่อนหน้า"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() =>
+                    setSliderIndex((prev) =>
+                      (prev + 1) % Math.max(sliderPromotions.length, 1)
+                    )
+                  }
+                  disabled={sliderPromotions.length === 0}
+                  aria-label="สไลด์ถัดไป"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {fetching ? (
+            <div className="mt-3 space-y-2">
+              <Skeleton className="h-28 w-full rounded-xl" />
+            </div>
+          ) : sliderPromotions.length === 0 ? (
+            <div className="mt-3 rounded-xl border bg-muted/40 p-4 text-sm text-muted-foreground">
+              ไม่มีโปรโมชันสำหรับพรีวิว
+            </div>
+          ) : (
+            <div className="relative mt-3 overflow-hidden rounded-xl bg-gradient-to-r from-primary/10 via-background to-background">
+              <div className="grid gap-3 p-5 sm:grid-cols-[1.6fr,1fr] sm:items-center">
+                <div className="space-y-2">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-primary">
+                    Promotion Slide #{sliderIndex + 1}
+                  </p>
+                  <h3 className="text-lg font-semibold leading-tight sm:text-xl">
+                    {sliderPromotions[sliderIndex]?.title}
+                  </h3>
+                  {sliderPromotions[sliderIndex]?.description && (
+                    <p className="text-sm text-muted-foreground">
+                      {sliderPromotions[sliderIndex]?.description}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {sliderPromotions[sliderIndex]?.promo_code && (
+                      <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-1 font-semibold text-primary">
+                        โค้ด: {sliderPromotions[sliderIndex]?.promo_code}
+                      </span>
+                    )}
+                    {sliderPromotions[sliderIndex]?.discount_percent && (
+                      <span className="rounded-full border border-emerald-300/60 bg-emerald-500/10 px-2 py-1 font-semibold text-emerald-600 dark:text-emerald-300">
+                        ลด {sliderPromotions[sliderIndex]?.discount_percent}%
+                      </span>
+                    )}
+                    {sliderPromotions[sliderIndex]?.min_purchase_amount && (
+                      <span className="rounded-full border border-amber-300/60 bg-amber-500/10 px-2 py-1 font-semibold text-amber-700 dark:text-amber-300">
+                        ขั้นต่ำ ฿
+                        {Number(
+                          sliderPromotions[sliderIndex]?.min_purchase_amount
+                        ).toLocaleString("th-TH")}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <div className="flex items-center gap-2 rounded-full bg-card/80 px-3 py-2 shadow-sm">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
+                      {sliderPromotions[sliderIndex]?.promo_code
+                        ? sliderPromotions[sliderIndex]?.promo_code?.slice(0, 2)
+                        : "PR"}
+                    </div>
+                    <div className="text-left">
+                      <p className="text-xs text-muted-foreground">สถานะ</p>
+                      <p className="text-sm font-semibold">
+                        {sliderPromotions[sliderIndex]?.is_active
+                          ? "เปิดใช้งาน"
+                          : "ปิดใช้งาน"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {sliderPromotions.length > 1 && (
+                <div className="flex flex-wrap items-center justify-center gap-2 border-t border-border/60 bg-card/60 px-3 py-2 backdrop-blur">
+                  {sliderPromotions.map((promo, i) => (
+                    <button
+                      key={promo.id ?? i}
+                      type="button"
+                      onClick={() => setSliderIndex(i)}
+                      className={`h-2 w-2 rounded-full transition ${
+                        i === sliderIndex ? "w-4 bg-primary" : "bg-muted"
+                      }`}
+                      aria-label={`เลือกโปรโมชันที่ ${i + 1}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {showForm && (

@@ -7,16 +7,20 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
+import { useAlert } from "@/lib/alert";
 import { useEffect, useState } from "react";
 
 export default function ProfilePage() {
   const { user, loading } = useAuth();
+  const { showAlert } = useAlert();
   const router = useRouter();
   const [form, setForm] = useState({
     email: "",
     fullName: "",
     phone: ""
   });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -43,6 +47,30 @@ export default function ProfilePage() {
     return null;
   }
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.fullName.trim()) {
+      await showAlert("กรุณากรอกชื่อ-นามสกุล", { title: "แจ้งเตือน" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          full_name: form.fullName.trim(),
+          phone: form.phone.trim()
+        }
+      });
+      if (error) throw error;
+      await showAlert("บันทึกข้อมูลโปรไฟล์เรียบร้อย", { title: "สำเร็จ" });
+    } catch (err) {
+      console.error("update profile error", err);
+      await showAlert("บันทึกไม่สำเร็จ กรุณาลองใหม่", { title: "เกิดข้อผิดพลาด" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <Breadcrumb items={[{ label: "โปรไฟล์" }]} />
@@ -54,7 +82,7 @@ export default function ProfilePage() {
       </section>
 
       <div className="rounded-2xl border bg-card p-6 shadow-sm">
-        <form className="space-y-4">
+        <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-2">
             <Label htmlFor="email">อีเมล</Label>
             <Input
@@ -92,7 +120,7 @@ export default function ProfilePage() {
             />
           </div>
           <Button type="submit" className="w-full">
-            บันทึกการเปลี่ยนแปลง
+            {saving ? "กำลังบันทึก..." : "บันทึกการเปลี่ยนแปลง"}
           </Button>
         </form>
       </div>

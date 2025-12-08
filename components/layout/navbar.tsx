@@ -23,13 +23,13 @@ import {
 
 const guestLinks = [
   { href: "/", label: "หน้าหลัก" },
-  { href: "/products", label: "สินค้าทั้งหมด" }
+  { href: "/products", label: "สินค้าทั้งหมด" },
+  { href: "/promotions", label: "โปรโมชั่น" },
+  { href: "/how-to-order", label: "วิธีสั่งซื้อ" },
+  { href: "/blog", label: "บทความ" }
 ];
 
-const authedLinks = [
-  { href: "/", label: "หน้าหลัก" },
-  { href: "/products", label: "สินค้าทั้งหมด" }
-];
+const authedLinks = guestLinks;
 
 export function Navbar() {
   const pathname = usePathname();

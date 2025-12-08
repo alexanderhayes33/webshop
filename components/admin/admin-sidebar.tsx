@@ -2,7 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, ShoppingCart, Settings, Home, Tags, Megaphone, Image, Users, BarChart3, Truck } from "lucide-react";
+import {
+  LayoutDashboard,
+  Package,
+  ShoppingCart,
+  Settings,
+  Home,
+  Tags,
+  Megaphone,
+  Image,
+  Users,
+  BarChart3,
+  Truck,
+  Notebook,
+  Sparkles
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -46,6 +60,16 @@ const menuItems = [
     title: "โปรโมชัน",
     href: "/admin/promotions",
     icon: Megaphone
+  },
+  {
+    title: "บทความ/วิธีสั่งซื้อ",
+    href: "/admin/blogs",
+    icon: Notebook
+  },
+  {
+    title: "Popup โปรโมชัน",
+    href: "/admin/promo-popups",
+    icon: Sparkles
   },
   {
     title: "แบนเนอร์",

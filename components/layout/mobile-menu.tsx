@@ -1,10 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, X, User, ShoppingCart, Home, Package, LogOut } from "lucide-react";
+import {
+  Menu,
+  X,
+  User,
+  ShoppingCart,
+  Home,
+  Package,
+  LogOut,
+  Phone,
+  Mail,
+  MessageCircle,
+  Globe,
+  Instagram,
+  Facebook,
+  Link2,
+  Sparkles as SparklesIcon,
+  Pen
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth/auth-provider";
@@ -12,6 +29,34 @@ import { useCart } from "@/components/cart/cart-provider";
 import { supabase } from "@/lib/supabaseClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProductSearch } from "./product-search";
+
+type ContactLink = {
+  id: number;
+  label: string;
+  type: string;
+  url: string;
+  display_order: number;
+  is_active: boolean;
+};
+
+function getIcon(type: string) {
+  switch (type) {
+    case "phone":
+      return Phone;
+    case "email":
+      return Mail;
+    case "line":
+      return MessageCircle;
+    case "website":
+      return Globe;
+    case "instagram":
+      return Instagram;
+    case "facebook":
+      return Facebook;
+    default:
+      return Link2;
+  }
+}
 
 export function MobileMenu() {
   const [open, setOpen] = useState(false);
@@ -22,6 +67,8 @@ export function MobileMenu() {
   const { getTotalItems } = useCart();
   const cartItemsCount = getTotalItems();
   const isAdmin = !!user && user.user_metadata?.role === "admin";
+  const [contacts, setContacts] = useState<ContactLink[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(true);
 
   useEffect(() => {
     setMounted(true);
@@ -38,14 +85,38 @@ export function MobileMenu() {
     };
   }, [open]);
 
+  useEffect(() => {
+    async function loadContacts() {
+      setLoadingContacts(true);
+      const { data, error } = await supabase
+        .from("contact_links")
+        .select("*")
+        .eq("is_active", true)
+        .order("display_order", { ascending: true })
+        .order("created_at", { ascending: true });
+      if (!error && data) {
+        setContacts(data as ContactLink[]);
+      }
+      setLoadingContacts(false);
+    }
+    loadContacts();
+  }, []);
+
+  const visibleContacts = useMemo(
+    () => contacts.filter((c) => c.is_active),
+    [contacts]
+  );
+
   const guestLinks = [
     { href: "/", label: "หน้าหลัก", icon: Home },
-    { href: "/products", label: "สินค้าทั้งหมด", icon: Package }
+    { href: "/products", label: "สินค้าทั้งหมด", icon: Package },
+    { href: "/promotions", label: "โปรโมชั่น", icon: SparklesIcon },
+    { href: "/how-to-order", label: "วิธีสั่งซื้อ", icon: Globe },
+    { href: "/blog", label: "บทความ", icon: Pen }
   ];
 
   const authedLinks = [
-    { href: "/", label: "หน้าหลัก", icon: Home },
-    { href: "/products", label: "สินค้าทั้งหมด", icon: Package },
+    ...guestLinks,
     { href: "/cart", label: "ตะกร้าสินค้า", icon: ShoppingCart }
   ];
 
@@ -237,6 +308,42 @@ export function MobileMenu() {
                       </Button>
                     </>
                   )}
+
+                  <div className="my-4 border-t" />
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground">
+                      ช่องทางติดต่อ
+                    </p>
+                    {loadingContacts ? (
+                      <div className="space-y-2">
+                        <Skeleton className="h-9 w-full" />
+                        <Skeleton className="h-9 w-full" />
+                      </div>
+                    ) : visibleContacts.length === 0 ? (
+                      <p className="text-[11px] text-muted-foreground">ยังไม่มีข้อมูล</p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2">
+                        {visibleContacts.map((c) => {
+                          const Icon = getIcon(c.type);
+                          return (
+                            <Link
+                              key={c.id}
+                              href={c.url}
+                              onClick={() => setOpen(false)}
+                              className="flex items-center gap-2 rounded-lg border bg-background/80 px-2 py-2 text-[11px] transition hover:border-primary/50"
+                              target={c.url.startsWith("http") ? "_blank" : undefined}
+                              rel="noreferrer"
+                            >
+                              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                <Icon className="h-4 w-4" />
+                              </span>
+                              <span className="line-clamp-1">{c.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>

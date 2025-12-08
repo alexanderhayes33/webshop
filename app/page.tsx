@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
@@ -10,9 +10,10 @@ import { supabase } from "@/lib/supabaseClient";
 import { ProductDialog } from "@/components/products/product-dialog";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { cn } from "@/lib/utils";
-import { ShoppingCart, Plus } from "lucide-react";
+import { ShoppingCart, Plus, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { useCart } from "@/components/cart/cart-provider";
 import { useAlert } from "@/lib/alert";
+import { PromoPopup } from "@/components/home/promo-popup";
 
 type Product = {
   id: number;
@@ -40,8 +41,9 @@ type Promotion = {
 
 export default function HomePage() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [promotion, setPromotion] = useState<Promotion | null>(null);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [promoIndex, setPromoIndex] = useState(0);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const { addToCart } = useCart();
@@ -82,33 +84,28 @@ export default function HomePage() {
         setProducts(sortedProducts);
       }
 
-      // โหลดโปรโมชันที่เปิดใช้งาน
-      const now = new Date().toISOString();
+      // โหลดโปรโมชันที่เปิดใช้งาน (หลายรายการ)
       const { data: promotionData, error: promotionError } = await supabase
         .from("promotions")
         .select("*")
         .eq("is_active", true)
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(10);
       
       // กรองโปรโมชันที่ยังไม่หมดอายุ
       if (promotionData) {
-        const promo = promotionData as Promotion;
-        const startDate = promo.start_date ? new Date(promo.start_date) : null;
-        const endDate = promo.end_date ? new Date(promo.end_date) : null;
         const nowDate = new Date();
-        
-        if (
+        const validPromos = (promotionData as Promotion[]).filter((promo) => {
+          const startDate = promo.start_date ? new Date(promo.start_date) : null;
+          const endDate = promo.end_date ? new Date(promo.end_date) : null;
+          return (
           (startDate === null || startDate <= nowDate) &&
           (endDate === null || endDate >= nowDate)
-        ) {
-          setPromotion(promo);
-        } else {
-          setPromotion(null);
-        }
+          );
+        });
+        setPromotions(validPromos);
       } else {
-        setPromotion(null);
+        setPromotions([]);
       }
 
       if (promotionError) {
@@ -122,45 +119,119 @@ export default function HomePage() {
 
     loadData();
   }, []);
+
+  const hasPromotions = useMemo(() => promotions.length > 0, [promotions.length]);
+
+  useEffect(() => {
+    if (!hasPromotions) return;
+    const timer = setInterval(
+      () => setPromoIndex((prev) => (prev + 1) % promotions.length),
+      6000
+    );
+    return () => clearInterval(timer);
+  }, [hasPromotions, promotions.length]);
+
+  useEffect(() => {
+    setPromoIndex(0);
+  }, [promotions.length]);
   return (
     <div className="space-y-8">
       <Breadcrumb items={[{ label: "หน้าหลัก" }]} />
-      {/* PROMO BANNER */}
-      {promotion && (
+      <PromoPopup />
+      {/* PROMO SLIDER */}
+      {loading ? (
+        <section className="space-y-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-4 w-16" />
+          </div>
+          <Skeleton className="h-28 w-full rounded-3xl" />
+        </section>
+      ) : hasPromotions ? (
       <section className="relative overflow-hidden rounded-3xl border bg-gradient-to-r from-primary/10 via-primary/5 to-background px-4 py-5 sm:px-6 sm:py-6">
         <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/20 blur-3xl" />
         <div className="absolute -bottom-16 left-10 h-40 w-40 rounded-full bg-primary/10 blur-3xl" />
 
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <div className="inline-flex items-center gap-2 rounded-full bg-background/70 px-3 py-1 font-medium text-primary shadow-sm">
+              <Sparkles className="h-3.5 w-3.5" />
+              โปรโมชันล่าสุด
+            </div>
+            {promotions.length > 1 && (
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() =>
+                    setPromoIndex((prev) => (prev - 1 + promotions.length) % promotions.length)
+                  }
+                  aria-label="โปรก่อนหน้า"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setPromoIndex((prev) => (prev + 1) % promotions.length)}
+                  aria-label="โปรถัดไป"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <div className="relative mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 rounded-full bg-background/70 px-3 py-1 text-[11px] text-primary shadow-sm">
               <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                {promotion.title}
+                {promotions[promoIndex]?.title}
             </div>
-              {promotion.discount_percent && promotion.min_purchase_amount && (
-            <h2 className="text-lg sm:text-xl font-semibold tracking-tight">
-                  ซื้อครบ {Number(promotion.min_purchase_amount).toLocaleString("th-TH")} บาท รับส่วนลดทันที {promotion.discount_percent}%
+              {promotions[promoIndex]?.discount_percent && promotions[promoIndex]?.min_purchase_amount ? (
+                <h2 className="text-lg font-semibold tracking-tight sm:text-xl">
+                  ซื้อครบ{" "}
+                  {Number(promotions[promoIndex]?.min_purchase_amount ?? 0).toLocaleString("th-TH")} บาท
+                  รับส่วนลดทันที {promotions[promoIndex]?.discount_percent}%
+                </h2>
+              ) : (
+                <h2 className="text-lg font-semibold tracking-tight sm:text-xl">
+                  {promotions[promoIndex]?.description || "โปรโมชันพิเศษวันนี้"}
             </h2>
               )}
-              {promotion.description && (
+              {promotions[promoIndex]?.description && (
             <p className="max-w-xl text-[11px] sm:text-xs text-muted-foreground">
-                  {promotion.description}
+                  {promotions[promoIndex]?.description}
             </p>
               )}
           </div>
           <div className="flex flex-col items-start gap-2 text-[11px] sm:items-end">
-              {promotion.promo_code && (
+              {promotions[promoIndex]?.promo_code && (
             <span className="rounded-full bg-background/80 px-3 py-1 font-medium text-primary shadow-sm">
-                  CODE: {promotion.promo_code}
+                  CODE: {promotions[promoIndex]?.promo_code}
             </span>
               )}
-            <Button size="sm" className="rounded-full text-xs" asChild>
-              <Link href="/login">ล็อกอินเพื่อใช้สิทธิ์</Link>
-            </Button>
+            </div>
           </div>
+
+          {promotions.length > 1 && (
+            <div className="mt-4 flex items-center justify-center gap-2">
+              {promotions.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setPromoIndex(i)}
+                  className={`h-2 w-2 rounded-full transition ${
+                    i === promoIndex ? "w-4 bg-primary" : "bg-muted"
+                  }`}
+                  aria-label={`เลือกโปรโมชันที่ ${i + 1}`}
+                />
+              ))}
         </div>
+          )}
       </section>
-      )}
+      ) : null}
 
       {/* MAIN IMAGE BANNER (SLIDER) */}
       <MainBanner />
