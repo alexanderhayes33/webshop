@@ -110,8 +110,6 @@ export function MobileMenu() {
   const guestLinks = [
     { href: "/", label: "หน้าหลัก", icon: Home },
     { href: "/products", label: "สินค้าทั้งหมด", icon: Package },
-    { href: "/promotions", label: "โปรโมชั่น", icon: SparklesIcon },
-    { href: "/how-to-order", label: "วิธีสั่งซื้อ", icon: Globe },
     { href: "/blog", label: "บทความ", icon: Pen }
   ];
 

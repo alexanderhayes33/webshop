@@ -10,6 +10,16 @@ export default function BlogPage() {
         heading="บทความ"
         description="อัปเดตข่าวสารและสาระน่าสนใจ"
       />
+      <BlogList
+        category="promotion"
+        heading="โปรโมชั่น"
+        description="อัปเดตโปรล่าสุดของร้าน"
+      />
+      <BlogList
+        category="how-to-order"
+        heading="วิธีสั่งซื้อ"
+        description="ขั้นตอนสั่งซื้อและคำแนะนำการชำระเงิน"
+      />
     </div>
   );
 }
