@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAlert } from "@/lib/alert";
 import { Search, Plus, X } from "lucide-react";
+import { ImageUpload } from "@/components/admin/image-upload";
 
 type Popup = {
   id: number;
@@ -51,11 +52,7 @@ export default function AdminPromoPopupsPage() {
     );
   }, [popups, search]);
 
-  useEffect(() => {
-    loadPopups();
-  }, []);
-
-  async function loadPopups() {
+  const loadPopups = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("promotion_popups")
@@ -69,7 +66,11 @@ export default function AdminPromoPopupsPage() {
       setPopups((data as Popup[]) || []);
     }
     setLoading(false);
-  }
+  }, [showAlert]);
+
+  useEffect(() => {
+    loadPopups();
+  }, [loadPopups]);
 
   function resetForm() {
     setForm({
@@ -104,7 +105,7 @@ export default function AdminPromoPopupsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.image_url.trim()) {
-      await showAlert("กรุณากรอกลิงก์รูปภาพ", { title: "แจ้งเตือน" });
+      await showAlert("กรุณาอัปโหลดรูปภาพ", { title: "แจ้งเตือน" });
       return;
     }
     setSaving(true);
@@ -226,13 +227,12 @@ export default function AdminPromoPopupsPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="image_url">ลิงก์รูปภาพ *</Label>
-                <Input
-                  id="image_url"
+                <ImageUpload
                   value={form.image_url}
-                  onChange={(e) => setForm((f) => ({ ...f, image_url: e.target.value }))}
-                  placeholder="https://..."
+                  onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
+                  label="รูปภาพ Popup"
                   required
+                  previewClassName="max-w-md"
                 />
               </div>
               <div className="space-y-2">

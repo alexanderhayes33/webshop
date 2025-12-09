@@ -11,6 +11,7 @@ import { useAlert } from "@/lib/alert";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { Search, X, Edit } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ImageUpload } from "@/components/admin/image-upload";
 
 type Product = {
   id: number;
@@ -752,18 +753,11 @@ export default function AdminProductsPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="image_url" className="text-xs">
-                URL รูปภาพ
-              </Label>
-              <Input
-                id="image_url"
-                type="url"
-                value={form.image_url}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, image_url: e.target.value }))
-                }
-                placeholder="https://example.com/image.jpg"
-                className="h-9 text-sm"
+              <ImageUpload
+                value={form.image_url || ""}
+                onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
+                label="รูปภาพสินค้า"
+                previewClassName="max-w-xs"
               />
             </div>
             <div className="space-y-1.5">

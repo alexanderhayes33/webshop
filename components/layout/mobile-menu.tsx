@@ -121,9 +121,21 @@ export function MobileMenu() {
   const links = user ? authedLinks : guestLinks;
 
   async function handleLogout() {
-    await supabase.auth.signOut();
-    setOpen(false);
-    router.push("/");
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error("Logout error:", error);
+        // ถ้ามี error ก็ยัง redirect ไปหน้าแรก
+      }
+      setOpen(false);
+      // รอสักครู่เพื่อให้ auth state อัปเดต
+      await new Promise(resolve => setTimeout(resolve, 100));
+      window.location.href = "/";
+    } catch (err) {
+      console.error("Logout error:", err);
+      setOpen(false);
+      window.location.href = "/";
+    }
   }
 
   const menuContent = open && mounted ? (

@@ -15,7 +15,8 @@ import {
   BarChart3,
   Truck,
   Notebook,
-  Sparkles
+  Sparkles,
+  MessageCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -93,20 +94,40 @@ export function AdminSidebar() {
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto p-4">
         {menuItems.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+          const isSettings = item.href === "/admin/settings";
           return (
-            <Link key={item.href} href={item.href}>
-              <Button
-                variant={isActive ? "default" : "ghost"}
-                className={cn(
-                  "w-full justify-start gap-3",
-                  isActive && "bg-primary text-primary-foreground"
-                )}
-              >
-                <item.icon className="h-4 w-4" />
-                <span className="text-sm">{item.title}</span>
-              </Button>
-            </Link>
+            <div key={item.href}>
+              <Link href={item.href}>
+                <Button
+                  variant={isActive ? "default" : "ghost"}
+                  className={cn(
+                    "w-full justify-start gap-3",
+                    isActive && "bg-primary text-primary-foreground"
+                  )}
+                >
+                  <item.icon className="h-4 w-4" />
+                  <span className="text-sm">{item.title}</span>
+                </Button>
+              </Link>
+              {isSettings && isActive && (
+                <div className="ml-4 mt-1 space-y-1 border-l pl-2">
+                  <Link href="/admin/settings/line">
+                    <Button
+                      variant={pathname === "/admin/settings/line" ? "default" : "ghost"}
+                      size="sm"
+                      className={cn(
+                        "w-full justify-start gap-2 text-xs",
+                        pathname === "/admin/settings/line" && "bg-primary text-primary-foreground"
+                      )}
+                    >
+                      <MessageCircle className="h-3 w-3" />
+                      LINE Login
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </div>
           );
         })}
       </nav>

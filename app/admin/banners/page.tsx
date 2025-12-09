@@ -10,6 +10,7 @@ import { useAlert } from "@/lib/alert";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { Search, X, Plus } from "lucide-react";
 import Image from "next/image";
+import { ImageUpload } from "@/components/admin/image-upload";
 
 type Banner = {
   id: number;
@@ -85,7 +86,7 @@ export default function AdminBannersPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.image_url.trim()) {
-      await showAlert("กรุณากรอก URL รูปภาพ", {
+      await showAlert("กรุณาอัปโหลดรูปภาพ", {
         title: "แจ้งเตือน"
       });
       return;
@@ -217,31 +218,13 @@ export default function AdminBannersPage() {
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="image_url">URL รูปภาพ *</Label>
-                <Input
-                  id="image_url"
+                <ImageUpload
                   value={form.image_url}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, image_url: e.target.value }))
-                  }
-                  placeholder="https://example.com/image.jpg"
+                  onChange={(url) => setForm((f) => ({ ...f, image_url: url }))}
+                  label="รูปภาพแบนเนอร์"
                   required
+                  previewClassName="max-w-md"
                 />
-                {form.image_url && (
-                  <div className="relative mt-2 aspect-video w-full max-w-md overflow-hidden rounded-lg border bg-muted">
-                    <Image
-                      src={form.image_url}
-                      alt={form.alt_text || "Preview"}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 100vw, 50vw"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = "none";
-                      }}
-                    />
-                  </div>
-                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="alt_text">ข้อความอธิบายรูป</Label>

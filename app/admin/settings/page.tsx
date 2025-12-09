@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select } from "@/components/ui/select";
 import { supabase } from "@/lib/supabaseClient";
 import { useAlert } from "@/lib/alert";
-import { ToggleLeft, ToggleRight, Trash2, Pencil, Plus } from "lucide-react";
+import { ToggleLeft, ToggleRight, Trash2, Pencil, Plus, MessageCircle } from "lucide-react";
+import Link from "next/link";
 
 type ContactLink = {
   id: number;
@@ -58,11 +59,7 @@ export default function AdminSettingsPage() {
     [contacts]
   );
 
-  useEffect(() => {
-    loadContacts();
-  }, []);
-
-  async function loadContacts() {
+  const loadContacts = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("contact_links")
@@ -77,7 +74,11 @@ export default function AdminSettingsPage() {
       setContacts((data as ContactLink[]) || []);
     }
     setLoading(false);
-  }
+  }, [showAlert]);
+
+  useEffect(() => {
+    loadContacts();
+  }, [loadContacts]);
 
   function resetForm() {
     setForm({
@@ -183,6 +184,14 @@ export default function AdminSettingsPage() {
         <p className="text-xs sm:text-sm text-muted-foreground">
           จัดการการตั้งค่าร้านค้าและช่องทางติดต่อ
         </p>
+        <div className="pt-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/admin/settings/line" className="gap-2">
+              <MessageCircle className="h-4 w-4" />
+              ตั้งค่า LINE Login
+            </Link>
+          </Button>
+        </div>
       </section>
 
       <div className="space-y-6">

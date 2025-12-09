@@ -41,8 +41,19 @@ export function Navbar() {
   const cartItemsCount = getTotalItems();
 
   async function handleLogout() {
-    await supabase.auth.signOut();
-    router.push("/");
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error("Logout error:", error);
+        // ถ้ามี error ก็ยัง redirect ไปหน้าแรก
+      }
+      // รอสักครู่เพื่อให้ auth state อัปเดต
+      await new Promise(resolve => setTimeout(resolve, 100));
+      window.location.href = "/";
+    } catch (err) {
+      console.error("Logout error:", err);
+      window.location.href = "/";
+    }
   }
 
   return (

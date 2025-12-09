@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAlert } from "@/lib/alert";
 import { Search, Plus, X, Sparkles } from "lucide-react";
+import { ImageUpload } from "@/components/admin/image-upload";
 
 type BlogPost = {
   id: number;
@@ -59,11 +60,7 @@ export default function AdminBlogsPage() {
     );
   }, [posts, search]);
 
-  useEffect(() => {
-    loadPosts();
-  }, []);
-
-  async function loadPosts() {
+  const loadPosts = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("blog_posts")
@@ -77,7 +74,11 @@ export default function AdminBlogsPage() {
       setPosts((data as BlogPost[]) || []);
     }
     setLoading(false);
-  }
+  }, [showAlert]);
+
+  useEffect(() => {
+    loadPosts();
+  }, [loadPosts]);
 
   function resetForm() {
     setForm({
@@ -261,12 +262,11 @@ export default function AdminBlogsPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="cover_url">รูปปก (URL)</Label>
-                <Input
-                  id="cover_url"
-                  value={form.cover_url}
-                  onChange={(e) => setForm((f) => ({ ...f, cover_url: e.target.value }))}
-                  placeholder="https://..."
+                <ImageUpload
+                  value={form.cover_url || ""}
+                  onChange={(url) => setForm((f) => ({ ...f, cover_url: url }))}
+                  label="รูปปก"
+                  previewClassName="max-w-md"
                 />
               </div>
               <div className="space-y-2">

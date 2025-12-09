@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/components/auth/auth-provider";
+import Image from "next/image";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -42,8 +43,44 @@ export default function RegisterPage() {
     router.push("/login");
   }
 
+  async function handleLineLogin() {
+    setLoading(true);
+    try {
+      // ดึง config จาก API (เพิ่ม cache busting)
+      const configResponse = await fetch(`/api/auth/line/config?t=${Date.now()}`, {
+        cache: "no-store"
+      });
+      const config = configResponse.ok ? await configResponse.json() : null;
+      
+      console.log("LINE Register - Config from API:", config);
+      
+      const channelId = config?.channelId || process.env.NEXT_PUBLIC_LINE_CHANNEL_ID;
+      const siteUrl = config?.callbackUrl?.replace("/api/auth/line", "") || process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+      let redirectUri = config?.callbackUrl || `${siteUrl}/api/auth/line`;
+      
+      // ตรวจสอบและลบ trailing slash ถ้ามี
+      redirectUri = redirectUri.replace(/\/$/, "");
+      
+      if (!channelId) {
+        throw new Error("Channel ID ไม่ถูกตั้งค่า");
+      }
+      
+      const state = Math.random().toString(36).substring(2, 15);
+      
+      // บันทึก state ใน sessionStorage
+      sessionStorage.setItem("line_auth_state", state);
+
+      const lineAuthUrl = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${channelId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&scope=profile%20openid%20email`;
+
+      window.location.href = lineAuthUrl;
+    } catch (err: any) {
+      setError(err.message || "ไม่สามารถเชื่อมต่อ LINE ได้");
+      setLoading(false);
+    }
+  }
+
   return (
-    <div className="mx-auto max-w-md space-y-6">
+    <div className="mx-auto max-w-md space-y-6 pb-8">
       <div className="space-y-2 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">
           สมัครสมาชิกใหม่
@@ -62,43 +99,75 @@ export default function RegisterPage() {
           <Skeleton className="h-9 w-full" />
         </div>
       ) : (
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-4 rounded-xl border bg-card p-4 shadow-sm"
-        >
-          <div className="space-y-2">
-            <Label htmlFor="email">อีเมล</Label>
-            <Input
-              id="email"
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-            />
+        <>
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-4 rounded-xl border bg-card p-4 shadow-sm"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="email">อีเมล</Label>
+              <Input
+                id="email"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">รหัสผ่าน</Label>
+              <Input
+                id="password"
+                type="password"
+                required
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="อย่างน้อย 6 ตัวอักษร"
+              />
+            </div>
+            {error && (
+              <p className="text-xs text-destructive" role="alert">
+                {error}
+              </p>
+            )}
+            <Button type="submit" className="w-full" disabled={loading}>
+              สมัครสมาชิก
+            </Button>
+          </form>
+
+          <div className="space-y-3">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  หรือ
+                </span>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full gap-2"
+              onClick={handleLineLogin}
+              disabled={loading}
+            >
+              <Image
+                src="https://img5.pic.in.th/file/secure-sv1/line-2e7ddb480260dd6dc.png"
+                alt="LINE"
+                width={16}
+                height={16}
+                className="h-4 w-4"
+                unoptimized
+              />
+              สมัครสมาชิกด้วย LINE
+            </Button>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">รหัสผ่าน</Label>
-            <Input
-              id="password"
-              type="password"
-              required
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="อย่างน้อย 6 ตัวอักษร"
-            />
-          </div>
-          {error && (
-            <p className="text-xs text-destructive" role="alert">
-              {error}
-            </p>
-          )}
-          <Button type="submit" className="w-full">
-            สมัครสมาชิก
-          </Button>
-        </form>
+        </>
       )}
     </div>
   );
