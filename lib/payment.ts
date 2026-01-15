@@ -36,7 +36,13 @@ function flattenObject(obj: Record<string, any>, prefix = ""): Record<string, an
     const fullKey = prefix ? `${prefix}.${key}` : key;
 
     if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-      result = { ...result, ...flattenObject(value, fullKey) };
+      const flattened = flattenObject(value, fullKey);
+      // If empty object, don't include it in signature (as per documentation)
+      // flattenObject will return empty object for {}, so we skip it
+      if (Object.keys(flattened).length > 0) {
+        result = { ...result, ...flattened };
+      }
+      // Empty objects are not included in signature
     } else {
       result[fullKey] = value;
     }
@@ -46,27 +52,46 @@ function flattenObject(obj: Record<string, any>, prefix = ""): Record<string, an
 }
 
 function buildKeyValueString(obj: Record<string, any>): string {
-  // Filter out undefined and null values
+  // According to Compay API docs: filter out null, undefined, and empty values
+  // Payment API may exclude null values from signature
   const filtered: Record<string, any> = {};
   for (const key in obj) {
-    if (obj[key] !== undefined && obj[key] !== null) {
-      filtered[key] = obj[key];
+    const value = obj[key];
+    // Filter out undefined and null values
+    if (value === undefined || value === null) {
+      continue;
     }
+    // Filter out empty strings
+    if (value === "") {
+      continue;
+    }
+    // Include all other values
+    filtered[key] = value;
   }
 
   // Flatten all keys (including nested like extendParams.foo, extendParams.bar)
+  // Empty objects are already filtered by flattenObject
   const flat = flattenObject(filtered);
+  
+  // Always use alphabetical order (as per API docs)
   const sortedKeys = Object.keys(flat).sort();
 
   const keyValuePairs = sortedKeys.map((key) => {
     const value = flat[key];
-    // Handle boolean
+    // According to docs: use `${key}=${value}` directly
+    // Null values are already filtered out above
+    // Handle boolean - convert to string
     if (typeof value === "boolean") {
-      return `${key}=${value ? "true" : "false"}`;
+      return `${key}=${value}`;
     }
-    // Handle number - convert to string without scientific notation
+    // Handle number - convert to string
     if (typeof value === "number") {
       return `${key}=${value}`;
+    }
+    // Handle object/array - should not reach here if empty object (already filtered by flattenObject)
+    if (typeof value === "object" && !Array.isArray(value)) {
+      // This should only happen for non-empty objects that weren't flattened
+      return `${key}=${JSON.stringify(value)}`;
     }
     return `${key}=${value}`;
   });

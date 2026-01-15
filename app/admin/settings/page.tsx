@@ -184,11 +184,17 @@ export default function AdminSettingsPage() {
         <p className="text-xs sm:text-sm text-muted-foreground">
           จัดการการตั้งค่าร้านค้าและช่องทางติดต่อ
         </p>
-        <div className="pt-2">
+        <div className="pt-2 flex flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
             <Link href="/admin/settings/line" className="gap-2">
               <MessageCircle className="h-4 w-4" />
               ตั้งค่า LINE Login
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/admin/settings/slipok" className="gap-2">
+              <MessageCircle className="h-4 w-4" />
+              ตั้งค่า SlipOK Payment
             </Link>
           </Button>
         </div>

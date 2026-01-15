@@ -414,7 +414,7 @@ export default function AdminReportsPage() {
                   };
                   const statusColors: Record<string, string> = {
                     pending: "bg-yellow-500/10 text-yellow-600",
-                    confirmed: "bg-blue-500/10 text-blue-600",
+                    confirmed: "bg-emerald-500/10 text-emerald-600",
                     processing: "bg-purple-500/10 text-purple-600",
                     shipped: "bg-emerald-500/10 text-emerald-600",
                     cancelled: "bg-destructive/10 text-destructive",
@@ -473,7 +473,7 @@ export default function AdminReportsPage() {
                         {(() => {
                           const statusLabels: Record<string, string> = {
                             pending: "รอดำเนินการ",
-                            confirmed: "ยืนยันแล้ว",
+                            confirmed: "ชำระเงินแล้ว",
                             processing: "กำลังเตรียมสินค้า",
                             shipped: "จัดส่งแล้ว",
                             cancelled: "ยกเลิก",
@@ -481,7 +481,7 @@ export default function AdminReportsPage() {
                           };
                           const statusColors: Record<string, string> = {
                             pending: "bg-yellow-500/10 text-yellow-600",
-                            confirmed: "bg-blue-500/10 text-blue-600",
+                            confirmed: "bg-emerald-500/10 text-emerald-600",
                             processing: "bg-purple-500/10 text-purple-600",
                             shipped: "bg-emerald-500/10 text-emerald-600",
                             cancelled: "bg-destructive/10 text-destructive",

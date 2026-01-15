@@ -47,9 +47,9 @@ const statusConfig: Record<
     color: "text-amber-600 bg-amber-100 dark:bg-amber-500/10 dark:text-amber-300"
   },
   confirmed: {
-    label: "ยืนยันแล้ว",
+    label: "ชำระเงินแล้ว",
     icon: CheckCircle,
-    color: "text-blue-600 bg-blue-100 dark:bg-blue-500/10 dark:text-blue-300"
+    color: "text-emerald-600 bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300"
   },
   processing: {
     label: "กำลังเตรียมสินค้า",
@@ -606,7 +606,7 @@ export default function AdminOrdersPage() {
                     className="h-9 text-sm"
                   >
                     <option value="pending">รอดำเนินการ</option>
-                    <option value="confirmed">ยืนยันแล้ว</option>
+                    <option value="confirmed">ชำระเงินแล้ว</option>
                     <option value="processing">กำลังเตรียมสินค้า</option>
                     <option value="shipped">จัดส่งแล้ว</option>
                     <option value="completed">สำเร็จ</option>

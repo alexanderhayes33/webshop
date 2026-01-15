@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
-import { generateSignature } from "@/lib/payment";
 
-const PAYMENT_SECRET_KEY = process.env.PAYMENT_SECRET_KEY || "";
-const PAYMENT_PARTNER_ID = process.env.PAYMENT_PARTNER_ID || process.env.PAYMENT_API_KEY || "";
+const PAYMENT_API_KEY = process.env.PAYMENT_API_KEY || "";
+const PAYMENT_PARTNER_ID = process.env.PAYMENT_PARTNER_ID || PAYMENT_API_KEY;
 
 interface DepositCallbackRequest {
   timestamp: string;
@@ -20,23 +19,11 @@ interface DepositCallbackRequest {
 
 export async function POST(request: NextRequest) {
   try {
-    if (!PAYMENT_SECRET_KEY) {
-      console.error("PAYMENT_SECRET_KEY is not configured");
-      return NextResponse.json(
-        {
-          code: 500,
-          msg: "Server configuration error"
-        },
-        { status: 500 }
-      );
-    }
-
-    // Get signature from headers
-    const signature = request.headers.get("x-signature");
+    // Get API key from headers
     const apiKey = request.headers.get("x-api-key");
 
-    if (!signature || !apiKey) {
-      console.error("Missing signature or api-key in callback");
+    if (!apiKey) {
+      console.error("Missing x-api-key in callback");
       return NextResponse.json(
         {
           code: 400,
@@ -46,32 +33,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Verify x-api-key matches our configured API key
+    if (apiKey !== PAYMENT_PARTNER_ID && apiKey !== PAYMENT_API_KEY) {
+      console.error("Invalid API key in callback:", apiKey);
+      return NextResponse.json(
+        {
+          code: 401,
+          msg: "Unauthorized"
+        },
+        { status: 401 }
+      );
+    }
+
     const body: DepositCallbackRequest = await request.json();
 
     console.log("Deposit Callback Received:", {
       refId: body.refId,
       transactionId: body.transactionId,
       status: body.status,
-      amount: body.amount
+      amount: body.amount,
+      payAmount: body.payAmount
     });
-
-    // Verify signature
-    const expectedSignature = await generateSignature(
-      body as any,
-      PAYMENT_SECRET_KEY,
-      PAYMENT_PARTNER_ID
-    );
-
-    if (signature !== expectedSignature) {
-      console.error("Invalid signature in callback");
-      return NextResponse.json(
-        {
-          code: 400,
-          msg: "Invalid signature"
-        },
-        { status: 400 }
-      );
-    }
 
     // Process callback based on status
     if (body.status === "PAID") {
@@ -90,6 +72,39 @@ export async function POST(request: NextRequest) {
             msg: "Order not found"
           },
           { status: 404 }
+        );
+      }
+
+      // 2. Verify amount matches (prevent amount tampering)
+      const amountDifference = Math.abs(order.total_amount - body.amount);
+      if (amountDifference > 0.01) { // Allow small floating point differences
+        console.error("Amount mismatch:", {
+          orderAmount: order.total_amount,
+          callbackAmount: body.amount,
+          difference: amountDifference
+        });
+        return NextResponse.json(
+          {
+            code: 400,
+            msg: "Amount mismatch"
+          },
+          { status: 400 }
+        );
+      }
+
+      // 3. Verify order is still pending (prevent duplicate processing)
+      if (order.status !== "pending") {
+        console.warn("Order already processed:", {
+          orderId: order.id,
+          currentStatus: order.status
+        });
+        // Return success even if already processed (idempotent)
+        return NextResponse.json(
+          {
+            code: 0,
+            msg: "Success"
+          },
+          { status: 200 }
         );
       }
 

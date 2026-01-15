@@ -93,15 +93,39 @@ export async function POST(request: NextRequest) {
     console.log("Calling payment API:", endpoint);
     console.log("Full Signature:", signature);
 
-    const response = await fetch(endpoint, {
+    // Create AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout
+
+    let response;
+    try {
+      response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "x-api-key": PAYMENT_API_KEY,
         "x-signature": signature,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
     });
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === "AbortError") {
+        console.error("Payment API Request Timeout");
+        return NextResponse.json(
+          {
+            code: 504,
+            msg: "การเชื่อมต่อหมดเวลา กรุณาลองใหม่อีกครั้ง",
+            cause: "Request timeout after 30 seconds"
+          },
+          { status: 504 }
+        );
+      }
+      throw fetchError;
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     console.log("Payment API Response Status:", response.status);
 
@@ -109,19 +133,39 @@ export async function POST(request: NextRequest) {
       const errorText = await response.text();
       console.error("Payment API Error:", errorText);
       
+      // Check if it's a CloudFront/HTML error response
+      if (response.status === 504 || errorText.includes("504 Gateway Timeout") || errorText.includes("CloudFront")) {
+        return NextResponse.json(
+          {
+            code: 504,
+            msg: "เซิร์ฟเวอร์ไม่สามารถตอบสนองได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง",
+            cause: "Gateway timeout - The server is temporarily unavailable"
+          },
+          { status: 504 }
+        );
+      }
+      
       // Try to parse as JSON
       let errorData;
       try {
         errorData = JSON.parse(errorText);
       } catch {
+        // If it's HTML or plain text, extract meaningful message
+        if (errorText.includes("<!DOCTYPE") || errorText.includes("<HTML>")) {
+          errorData = { 
+            msg: "เกิดข้อผิดพลาดจากเซิร์ฟเวอร์",
+            cause: `HTTP ${response.status} - Server error`
+          };
+        } else {
         errorData = { msg: errorText };
+        }
       }
       
       return NextResponse.json(
         {
           code: response.status,
           msg: errorData.msg || "Failed to create QR code",
-          cause: errorData.cause || errorText || `HTTP ${response.status}`
+          cause: errorData.cause || `HTTP ${response.status}`
         },
         { status: response.status }
       );

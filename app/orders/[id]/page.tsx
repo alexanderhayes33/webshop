@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-provider";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { useEffect, useState, useRef } from "react";
@@ -13,7 +14,9 @@ import { Package, Truck, CheckCircle, Clock, XCircle, MapPin, Phone, User } from
 import { cn } from "@/lib/utils";
 import { OrderTimeline } from "@/components/orders/order-timeline";
 import { PaymentDialog } from "@/components/payment/payment-dialog";
-import { CreditCard } from "lucide-react";
+import { SlipVerificationDialog } from "@/components/payment/slip-verification-dialog";
+import { CreditCard, Receipt, Copy, Check } from "lucide-react";
+import { getBankName } from "@/lib/bank-codes";
 
 type Order = {
   id: number;
@@ -60,9 +63,9 @@ const statusConfig: Record<
     color: "text-amber-600 bg-amber-100 dark:bg-amber-500/10 dark:text-amber-300"
   },
   confirmed: {
-    label: "ยืนยันแล้ว",
+    label: "ชำระเงินแล้ว",
     icon: CheckCircle,
-    color: "text-blue-600 bg-blue-100 dark:bg-blue-500/10 dark:text-blue-300"
+    color: "text-emerald-600 bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300"
   },
   processing: {
     label: "กำลังเตรียมสินค้า",
@@ -104,6 +107,21 @@ export default function OrderDetailPage() {
   const [statusHistory, setStatusHistory] = useState<StatusHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [showSlipDialog, setShowSlipDialog] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("qrcode");
+  const [userBankAccount, setUserBankAccount] = useState<{
+    accountName: string;
+    accountNo: string;
+    bankCode: string;
+  } | null>(null);
+  const [loadingBankAccount, setLoadingBankAccount] = useState(true);
+  const [merchantBankAccounts, setMerchantBankAccounts] = useState<Array<{
+    account_name: string;
+    account_no: string;
+    bank_code: string;
+  }>>([]);
+  const [loadingMerchantAccounts, setLoadingMerchantAccounts] = useState(true);
+  const [copiedAccountIndex, setCopiedAccountIndex] = useState<number | null>(null);
   const loadedOrderIdRef = useRef<number | null>(null);
   const isLoadingRef = useRef(false);
 
@@ -121,8 +139,74 @@ export default function OrderDetailPage() {
       loadOrder();
       }
     }
+    if (user) {
+      loadUserBankAccount();
+      loadMerchantBankAccounts();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, params.id]);
+
+  async function loadUserBankAccount() {
+    if (!user) return;
+    setLoadingBankAccount(true);
+    try {
+      const { data, error } = await supabase
+        .from("user_bank_accounts")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("is_default", true)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data) {
+        setUserBankAccount({
+          accountName: data.account_name,
+          accountNo: data.account_no,
+          bankCode: data.bank_code
+        });
+      }
+    } catch (err) {
+      console.error("load bank account error", err);
+    } finally {
+      setLoadingBankAccount(false);
+    }
+  }
+
+  async function loadMerchantBankAccounts() {
+    setLoadingMerchantAccounts(true);
+    try {
+      const { data, error } = await supabase
+        .from("slip_verification_settings")
+        .select("bank_accounts")
+        .eq("provider", "slipok")
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data && data.bank_accounts) {
+        setMerchantBankAccounts(Array.isArray(data.bank_accounts) ? data.bank_accounts : []);
+      } else {
+        setMerchantBankAccounts([]);
+      }
+    } catch (err) {
+      console.error("Load merchant bank accounts error:", err);
+      setMerchantBankAccounts([]);
+    } finally {
+      setLoadingMerchantAccounts(false);
+    }
+  }
+
+  async function copyToClipboard(text: string, index: number) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedAccountIndex(index);
+      setTimeout(() => setCopiedAccountIndex(null), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  }
 
   async function loadOrder() {
     if (!user || !params.id) return;
@@ -360,13 +444,130 @@ export default function OrderDetailPage() {
           </div>
           
           {order.status === "pending" && (
+            <div className="space-y-3 mt-4">
+              <div className="space-y-2">
+                <Label className="text-sm">ช่องทางชำระเงิน</Label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-accent transition-colors">
+                    <input
+                      type="radio"
+                      name="payment_method"
+                      value="qrcode"
+                      checked={selectedPaymentMethod === "qrcode"}
+                      onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+                      className="h-4 w-4"
+                    />
+                    <CreditCard className="h-4 w-4 text-primary" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">QR Code</p>
+                    </div>
+                  </label>
+                  <label className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-accent transition-colors">
+                    <input
+                      type="radio"
+                      name="payment_method"
+                      value="slip"
+                      checked={selectedPaymentMethod === "slip"}
+                      onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+                      className="h-4 w-4"
+                    />
+                    <Receipt className="h-4 w-4 text-primary" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">โอนธนาคาร</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* แสดงข้อมูลบัญชีธนาคารสำหรับโอนธนาคาร */}
+              {selectedPaymentMethod === "slip" && (
+                <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+                  <p className="text-sm font-medium">ข้อมูลบัญชีสำหรับโอนเงิน</p>
+                  {loadingMerchantAccounts ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-full" />
+                    </div>
+                  ) : merchantBankAccounts.length > 0 ? (
+                    <div className="space-y-3">
+                      {merchantBankAccounts.map((account, index) => (
+                        <div key={index} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-muted-foreground">ชื่อบัญชี</p>
+                            <p className="text-sm font-medium">{account.account_name}</p>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-muted-foreground">เลขบัญชี</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium font-mono">{account.account_no}</p>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => copyToClipboard(account.account_no, index)}
+                              >
+                                {copiedAccountIndex === index ? (
+                                  <Check className="h-3 w-3 text-emerald-600" />
+                                ) : (
+                                  <Copy className="h-3 w-3" />
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-muted-foreground">ธนาคาร</p>
+                            <p className="text-sm font-medium">
+                              {getBankName(account.bank_code) || account.bank_code}
+                            </p>
+                          </div>
+                          {index < merchantBankAccounts.length - 1 && (
+                            <div className="border-t pt-3" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      ยังไม่มีการตั้งค่าบัญชีธนาคาร
+                    </p>
+                  )}
+                </div>
+              )}
+
             <Button
-              className="mt-4 w-full"
-              onClick={() => setShowPaymentDialog(true)}
+                className="w-full"
+                onClick={() => {
+                  if (selectedPaymentMethod === "qrcode") {
+                    if (!userBankAccount && !loadingBankAccount) {
+                      router.push("/profile");
+                    } else {
+                      setShowPaymentDialog(true);
+                    }
+                  } else {
+                    setShowSlipDialog(true);
+                  }
+                }}
+                disabled={loadingBankAccount && selectedPaymentMethod === "qrcode"}
             >
+                {selectedPaymentMethod === "qrcode" ? (
+                  <>
               <CreditCard className="mr-2 h-4 w-4" />
-              ชำระเงินผ่าน QR Code
+                    {loadingBankAccount ? "กำลังโหลด..." : "ชำระเงินผ่าน QR Code"}
+                  </>
+                ) : (
+                  <>
+                    <Receipt className="mr-2 h-4 w-4" />
+                    ยืนยันชำระเงิน
+                  </>
+                )}
             </Button>
+              {order.status === "pending" && selectedPaymentMethod === "qrcode" && !userBankAccount && !loadingBankAccount && (
+                <p className="text-xs text-destructive text-center">
+                  กรุณากรอกข้อมูลบัญชีธนาคารในโปรไฟล์ก่อนชำระเงิน
+                </p>
+              )}
+            </div>
           )}
           
           <Button variant="outline" className="mt-2 w-full" asChild>
@@ -375,8 +576,8 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
-      {/* Payment Dialog */}
-      {order.status === "pending" && user && (
+      {/* Payment Dialog - QR Code */}
+      {order.status === "pending" && user && userBankAccount && selectedPaymentMethod === "qrcode" && (
         <PaymentDialog
           key={order.order_number}
           open={showPaymentDialog}
@@ -384,11 +585,20 @@ export default function OrderDetailPage() {
           orderId={order.order_number}
           amount={order.total_amount}
           userId={user.id}
-          bankAccount={{
-            accountName: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME || "",
-            accountNo: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NO || "",
-            bankCode: process.env.NEXT_PUBLIC_BANK_CODE || "KBANK"
+          bankAccount={userBankAccount}
+          onPaymentSuccess={() => {
+            loadOrder();
           }}
+        />
+      )}
+
+      {/* Slip Verification Dialog */}
+      {order.status === "pending" && user && selectedPaymentMethod === "slip" && (
+        <SlipVerificationDialog
+          open={showSlipDialog}
+          onOpenChange={setShowSlipDialog}
+          orderId={order.id}
+          amount={order.total_amount}
           onPaymentSuccess={() => {
             loadOrder();
           }}

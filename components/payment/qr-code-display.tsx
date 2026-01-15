@@ -5,12 +5,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { QrCode } from "lucide-react";
 import Image from "next/image";
 import { QRCodeSVG } from "qrcode.react";
+import {
+  Item,
+  ItemContent,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import { Spinner } from "@/components/ui/spinner";
 
 interface QRCodeDisplayProps {
   qrcode: string;
   amount: number;
   transactionId?: string;
   className?: string;
+  isCheckingPayment?: boolean;
 }
 
 function isBase64Image(str: string): boolean {
@@ -21,7 +29,8 @@ export function QRCodeDisplay({
   qrcode,
   amount,
   transactionId,
-  className
+  className,
+  isCheckingPayment = false
 }: QRCodeDisplayProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +66,7 @@ export function QRCodeDisplay({
 
   return (
     <div className={`flex flex-col items-center space-y-4 ${className}`}>
-      <div className="relative border-2 border-border rounded-lg p-4 bg-white dark:bg-gray-900 flex items-center justify-center">
+      <div className="relative border-2 border-border rounded-lg p-4 bg-white dark:bg-gray-900 flex items-center justify-center w-full">
         {isBase64 ? (
           <Image
             src={qrcode.startsWith("data:") ? qrcode : `data:image/png;base64,${qrcode}`}
@@ -79,18 +88,43 @@ export function QRCodeDisplay({
         )}
       </div>
       
-      <div className="text-center space-y-2">
+      <div className="text-center space-y-2 w-full">
         <p className="text-sm text-muted-foreground">ยอดชำระเงิน</p>
-        <p className="text-2xl font-bold text-primary">
-          ฿{amount.toLocaleString("th-TH", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-          })}
-        </p>
-        {transactionId && (
-          <p className="text-xs text-muted-foreground font-mono">
-            {transactionId}
-          </p>
+        {isCheckingPayment ? (
+          <div className="flex w-full max-w-xs mx-auto flex-col gap-4">
+            <Item variant="muted">
+              <ItemMedia>
+                <Spinner />
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle className="line-clamp-1">
+                  กำลังตรวจสอบสถานะการชำระเงิน...
+                </ItemTitle>
+              </ItemContent>
+              <ItemContent className="flex-none justify-end">
+                <span className="text-sm tabular-nums">
+                  ฿{amount.toLocaleString("th-TH", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })}
+                </span>
+              </ItemContent>
+            </Item>
+          </div>
+        ) : (
+          <>
+            <p className="text-2xl font-bold text-primary">
+              ฿{amount.toLocaleString("th-TH", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              })}
+            </p>
+            {transactionId && (
+              <p className="text-xs text-muted-foreground font-mono">
+                {transactionId}
+              </p>
+            )}
+          </>
         )}
       </div>
       

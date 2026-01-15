@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Package, CheckCircle, ShoppingCart, DollarSign } from "lucide-react";
+import { Package, CheckCircle, ShoppingCart, DollarSign, Clock, XCircle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
@@ -11,7 +11,9 @@ export default function AdminDashboardPage() {
     totalProducts: 0,
     activeProducts: 0,
     totalOrders: 0,
-    totalRevenue: 0
+    totalRevenue: 0,
+    unpaidOrders: 0,
+    pendingOrders: 0
   });
   const [loading, setLoading] = useState(true);
 
@@ -21,17 +23,29 @@ export default function AdminDashboardPage() {
 
       const [productsResult, ordersResult] = await Promise.all([
         supabase.from("products").select("id, price, is_active"),
-        supabase.from("orders").select("id, total_amount").limit(1000)
+        supabase.from("orders").select("id, total_amount, status").limit(1000)
       ]);
 
       const products = (productsResult.data || []) as any[];
       const orders = (ordersResult.data || []) as any[];
 
+      // รายได้รวมเฉพาะออเดอร์ที่ชำระเงินแล้ว (confirmed)
+      const paidOrders = orders.filter((o) => o.status === "confirmed");
+      const totalRevenue = paidOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+
+      // ออเดอร์ที่ยังไม่โอน (pending)
+      const unpaidOrders = orders.filter((o) => o.status === "pending").length;
+      
+      // ออเดอร์ที่รอโอน (pending - เหมือนกัน)
+      const pendingOrders = orders.filter((o) => o.status === "pending").length;
+
       setStats({
         totalProducts: products.length,
         activeProducts: products.filter((p) => p.is_active).length,
         totalOrders: orders.length,
-        totalRevenue: orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
+        totalRevenue,
+        unpaidOrders,
+        pendingOrders
       });
 
       setLoading(false);
@@ -60,10 +74,22 @@ export default function AdminDashboardPage() {
       color: "text-purple-600 dark:text-purple-400"
     },
     {
-      title: "รายได้รวม",
+      title: "รายได้รวม :",
       value: `฿${stats.totalRevenue.toLocaleString("th-TH")}`,
       icon: DollarSign,
       color: "text-amber-600 dark:text-amber-400"
+    },
+    {
+      title: "ยังไม่โอน",
+      value: stats.unpaidOrders,
+      icon: XCircle,
+      color: "text-red-600 dark:text-red-400"
+    },
+    {
+      title: "รอโอน",
+      value: stats.pendingOrders,
+      icon: Clock,
+      color: "text-orange-600 dark:text-orange-400"
     }
   ];
 
@@ -78,13 +104,13 @@ export default function AdminDashboardPage() {
       </section>
 
       {loading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          {[...Array(6)].map((_, i) => (
             <Skeleton key={i} className="h-32 w-full rounded-2xl" />
           ))}
         </div>
       ) : (
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {statCards.map((stat, index) => (
             <div
               key={index}

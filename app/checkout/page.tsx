@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-provider";
 import { useCart } from "@/components/cart/cart-provider";
@@ -14,7 +14,19 @@ import { useAlert } from "@/lib/alert";
 import { supabase } from "@/lib/supabaseClient";
 import Image from "next/image";
 import { PaymentDialog } from "@/components/payment/payment-dialog";
-import { CreditCard, QrCode } from "lucide-react";
+import { SlipVerificationDialog } from "@/components/payment/slip-verification-dialog";
+import { CreditCard, QrCode, Receipt, Copy, Check } from "lucide-react";
+import { BANK_CODES } from "@/lib/bank-codes";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type Promotion = {
   id: number;
@@ -46,11 +58,78 @@ export default function CheckoutPage() {
   });
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("qrcode");
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [showSlipDialog, setShowSlipDialog] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<any>(null);
   const [promoCodeInput, setPromoCodeInput] = useState("");
   const [appliedPromotion, setAppliedPromotion] = useState<Promotion | null>(null);
   const [applyingPromo, setApplyingPromo] = useState(false);
   const [promoMessage, setPromoMessage] = useState<string | null>(null);
+  const [userBankAccount, setUserBankAccount] = useState<{
+    accountName: string;
+    accountNo: string;
+    bankCode: string;
+  } | null>(null);
+  const [loadingBankAccount, setLoadingBankAccount] = useState(true);
+  const [showBankAccountDialog, setShowBankAccountDialog] = useState(false);
+  const [merchantBankAccounts, setMerchantBankAccounts] = useState<Array<{
+    account_name: string;
+    account_no: string;
+    bank_code: string;
+  }>>([]);
+  const [loadingMerchantAccounts, setLoadingMerchantAccounts] = useState(true);
+  const [copiedAccountIndex, setCopiedAccountIndex] = useState<number | null>(null);
+
+  const loadMerchantBankAccounts = useCallback(async () => {
+    setLoadingMerchantAccounts(true);
+    try {
+      const { data, error } = await supabase
+        .from("slip_verification_settings")
+        .select("bank_accounts")
+        .eq("provider", "slipok")
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data && data.bank_accounts) {
+        setMerchantBankAccounts(Array.isArray(data.bank_accounts) ? data.bank_accounts : []);
+      } else {
+        setMerchantBankAccounts([]);
+      }
+    } catch (err) {
+      console.error("Load merchant bank accounts error:", err);
+      setMerchantBankAccounts([]);
+    } finally {
+      setLoadingMerchantAccounts(false);
+    }
+  }, []);
+
+  const loadUserBankAccount = useCallback(async () => {
+    if (!user) return;
+    setLoadingBankAccount(true);
+    try {
+      const { data, error } = await supabase
+        .from("user_bank_accounts")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("is_default", true)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data) {
+        setUserBankAccount({
+          accountName: data.account_name,
+          accountNo: data.account_no,
+          bankCode: data.bank_code
+        });
+      }
+    } catch (err) {
+      console.error("load bank account error", err);
+    } finally {
+      setLoadingBankAccount(false);
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -63,8 +142,10 @@ export default function CheckoutPage() {
         address: "",
         notes: ""
       });
+      loadUserBankAccount();
+      loadMerchantBankAccounts();
     }
-  }, [user, authLoading, router]);
+  }, [user, authLoading, router, loadUserBankAccount, loadMerchantBankAccounts]);
 
   useEffect(() => {
     if (!cartLoading && items.length === 0 && user) {
@@ -273,6 +354,15 @@ export default function CheckoutPage() {
         return;
       }
 
+      // ตรวจสอบว่ามีข้อมูลบัญชีธนาคารหรือไม่ (สำหรับ QR Code payment)
+      if (selectedPaymentMethod === "qrcode" && !userBankAccount) {
+        setSaving(false);
+        setShowBankAccountDialog(true);
+        return;
+      }
+
+      // สำหรับ SlipOK payment ไม่ต้องตรวจสอบข้อมูลบัญชี
+
       if (
         appliedPromotion &&
         appliedPromotion.min_purchase_amount &&
@@ -357,8 +447,12 @@ export default function CheckoutPage() {
       // บันทึก order เพื่อแสดง payment dialog
       setCreatedOrder(order);
       
-      // แสดง payment dialog ทันที
+      // แสดง payment dialog ตามช่องทางที่เลือก
+      if (selectedPaymentMethod === "slip") {
+        setShowSlipDialog(true);
+      } else {
       setShowPaymentDialog(true);
+      }
       
       // ล้างตะกร้าหลังจากแสดง payment dialog แล้ว
       // (จะล้างเมื่อปิด dialog หรือชำระเงินสำเร็จ)
@@ -490,9 +584,107 @@ export default function CheckoutPage() {
                     </p>
                   </div>
                 </label>
+                <label
+                  htmlFor="payment_slip"
+                  className="flex items-center gap-3 rounded-lg border p-4 cursor-pointer hover:bg-accent transition-colors"
+                >
+                  <input
+                    type="radio"
+                    id="payment_slip"
+                    name="payment_method"
+                    value="slip"
+                    checked={selectedPaymentMethod === "slip"}
+                    onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+                    className="h-4 w-4"
+                  />
+                  <Receipt className="h-5 w-5 text-primary" />
+                  <div className="flex-1">
+                    <p className="font-medium">โอนธนาคาร</p>
+                    <p className="text-xs text-muted-foreground">
+                      อัพโหลดสลิป
+                    </p>
+                  </div>
+                </label>
+                {selectedPaymentMethod === "slip" && (
+                  <div className="mt-3 rounded-xl border-2 border-primary/20 bg-primary/5 p-4 space-y-3">
+                    <p className="text-sm font-semibold text-foreground">
+                      โอนเงินเข้าบัญชี:
+                    </p>
+                    {loadingMerchantAccounts ? (
+                      <div className="space-y-2">
+                        <Skeleton className="h-20 w-full" />
+                      </div>
+                    ) : merchantBankAccounts.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        ยังไม่มีการตั้งค่าบัญชีรับเงิน
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {merchantBankAccounts.map((account, index) => {
+                          const bankName = BANK_CODES.find(b => b.code === account.bank_code)?.name || account.bank_code;
+                          const isCopied = copiedAccountIndex === index;
+                          
+                          const handleCopy = async () => {
+                            try {
+                              await navigator.clipboard.writeText(account.account_no);
+                              setCopiedAccountIndex(index);
+                              setTimeout(() => setCopiedAccountIndex(null), 2000);
+                            } catch (err) {
+                              console.error("Failed to copy:", err);
+                            }
+                          };
+                          
+                          return (
+                            <div
+                              key={index}
+                              className="rounded-lg border-2 border-primary/30 bg-background p-4 space-y-3 shadow-sm"
+                            >
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-muted-foreground">ชื่อบัญชี :</span>
+                                  <p className="text-sm font-semibold text-foreground">{account.account_name}</p>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-sm text-muted-foreground">เลขบัญชี :</span>
+                                  <div className="flex items-center gap-2 flex-1 justify-end">
+                                    <p className="text-base font-mono font-bold text-primary">
+                                      {account.account_no}
+                                    </p>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={handleCopy}
+                                      className="h-7 w-7 p-0 shrink-0"
+                                    >
+                                      {isCopied ? (
+                                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                      ) : (
+                                        <Copy className="h-3.5 w-3.5" />
+                                      )}
+                                    </Button>
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-muted-foreground">ธนาคาร :</span>
+                                  <p className="text-sm font-medium text-foreground">{bankName}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
-            <Button type="submit" className="w-full" disabled={saving} size="lg">
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={saving} 
+              size="lg"
+            >
               {saving ? (
                 "กำลังสร้างคำสั่งซื้อ..."
               ) : (
@@ -502,6 +694,22 @@ export default function CheckoutPage() {
                 </>
               )}
             </Button>
+            {selectedPaymentMethod === "qrcode" && !userBankAccount && !loadingBankAccount && (
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-xs text-destructive text-center">
+                  กรุณากรอกข้อมูลบัญชีธนาคารในโปรไฟล์ก่อนชำระเงิน
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push("/profile")}
+                  className="w-full sm:w-auto"
+                >
+                  ไปกรอกข้อมูลบัญชี
+                </Button>
+              </div>
+            )}
           </form>
         </div>
 
@@ -644,8 +852,26 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      {/* Payment Dialog */}
-      {createdOrder && selectedPaymentMethod === "qrcode" && (
+      {/* Bank Account Alert Dialog */}
+      <AlertDialog open={showBankAccountDialog} onOpenChange={setShowBankAccountDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>กรุณากรอกข้อมูลบัญชีธนาคาร</AlertDialogTitle>
+            <AlertDialogDescription>
+              เพื่อใช้ในการชำระเงินผ่าน QR Code กรุณาไปกรอกข้อมูลบัญชีธนาคารในโปรไฟล์ของคุณก่อน
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+            <AlertDialogAction onClick={() => router.push("/profile")}>
+              ไปที่โปรไฟล์
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Payment Dialog - QR Code */}
+      {createdOrder && selectedPaymentMethod === "qrcode" && userBankAccount && (
         <PaymentDialog
           open={showPaymentDialog}
           onOpenChange={(open) => {
@@ -659,11 +885,29 @@ export default function CheckoutPage() {
           orderId={createdOrder.order_number}
           amount={createdOrder.total_amount}
           userId={user.id}
-          bankAccount={{
-            accountName: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME || "",
-            accountNo: process.env.NEXT_PUBLIC_BANK_ACCOUNT_NO || "",
-            bankCode: process.env.NEXT_PUBLIC_BANK_CODE || "KBANK"
+          bankAccount={userBankAccount}
+          onPaymentSuccess={() => {
+            // ล้างตะกร้าเมื่อชำระเงินสำเร็จ
+            clearCart();
+            router.push(`/orders/${createdOrder.id}`);
           }}
+        />
+      )}
+
+      {/* Slip Verification Dialog */}
+      {createdOrder && selectedPaymentMethod === "slip" && (
+        <SlipVerificationDialog
+          open={showSlipDialog}
+          onOpenChange={(open) => {
+            setShowSlipDialog(open);
+            if (!open) {
+              // ล้างตะกร้าเมื่อปิด dialog
+              clearCart();
+              router.push(`/orders/${createdOrder.id}`);
+            }
+          }}
+          orderId={createdOrder.id}
+          amount={createdOrder.total_amount}
           onPaymentSuccess={() => {
             // ล้างตะกร้าเมื่อชำระเงินสำเร็จ
             clearCart();

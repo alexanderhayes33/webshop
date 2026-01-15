@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +13,15 @@ import { QRCodeDisplay } from "./qr-code-display";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useAlert } from "@/lib/alert";
-import { Loader2 } from "lucide-react";
+import { Loader2, CheckCircle2 } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
+import {
+  Item,
+  ItemContent,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import { Spinner } from "@/components/ui/spinner";
 
 interface PaymentDialogProps {
   open: boolean;
@@ -37,14 +46,19 @@ export function PaymentDialog({
   bankAccount,
   onPaymentSuccess
 }: PaymentDialogProps) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [qrData, setQrData] = useState<{
     qrcode: string;
     transactionId: string;
   } | null>(null);
+  const [orderStatus, setOrderStatus] = useState<string | null>(null);
+  const [orderDbId, setOrderDbId] = useState<number | null>(null);
+  const [isCheckingPayment, setIsCheckingPayment] = useState(false);
   const { showAlert } = useAlert();
   const generatedOrderIdRef = useRef<string | null>(null);
   const isGeneratingRef = useRef(false);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // ฟังก์ชันสำหรับเก็บ QR data ใน sessionStorage
   const getStoredQRData = (orderId: string) => {
@@ -80,10 +94,74 @@ export function PaymentDialog({
     }
   };
 
+  // Polling order status เมื่อมี QR code แล้ว
   useEffect(() => {
-    // Reset QR data เมื่อ orderId เปลี่ยน
+    if (!open || !qrData || !orderId) {
+      // หยุด polling เมื่อปิด dialog หรือไม่มี QR data
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      setIsCheckingPayment(false);
+      return;
+    }
+
+    // ตั้งค่าให้แสดง spinner ตลอดเวลาที่กำลัง polling
+    setIsCheckingPayment(true);
+
+    // เริ่ม polling ทุก 3 วินาที
+    const checkOrderStatus = async () => {
+      try {
+        const { data: order, error } = await supabase
+          .from("orders")
+          .select("id, status")
+          .eq("order_number", orderId)
+          .single();
+
+        if (error) throw error;
+
+        if (order) {
+          setOrderStatus(order.status);
+          setOrderDbId(order.id);
+          
+          // ถ้า status เป็น confirmed หรือ paid ให้หยุด polling
+          if (order.status === "confirmed" || order.status === "paid") {
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
+            setIsCheckingPayment(false);
+          }
+        }
+      } catch (error) {
+        console.error("Error checking order status:", error);
+      }
+    };
+
+    // ตรวจสอบทันทีครั้งแรก
+    checkOrderStatus();
+
+    // ตั้ง polling interval
+    pollingIntervalRef.current = setInterval(() => {
+      checkOrderStatus();
+    }, 3000);
+
+    // Cleanup เมื่อ component unmount หรือ dependencies เปลี่ยน
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      setIsCheckingPayment(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, qrData, orderId]);
+
+  useEffect(() => {
+    // Reset QR data และ order status เมื่อ orderId เปลี่ยน
     if (generatedOrderIdRef.current !== orderId) {
       setQrData(null);
+      setOrderStatus(null);
       generatedOrderIdRef.current = null;
     }
 
@@ -134,6 +212,10 @@ export function PaymentDialog({
       return;
     }
 
+    // แยกชื่อจริงจากชื่อเต็ม (ใช้แค่ชื่อจริง ไม่รวมนามสกุล)
+    const accountNameParts = (bankAccount.accountName || "").trim().split(" ");
+    const firstNameOnly = accountNameParts[0] || bankAccount.accountName.trim();
+
     isGeneratingRef.current = true;
     setLoading(true);
     try {
@@ -146,7 +228,7 @@ export function PaymentDialog({
           refId: orderId,
           amount,
           userId,
-          accountName: bankAccount.accountName,
+          accountName: firstNameOnly,
           accountNo: bankAccount.accountNo,
           bankCode: bankAccount.bankCode,
           timestamp: new Date().toISOString()
@@ -213,12 +295,27 @@ export function PaymentDialog({
               <Skeleton className="h-[300px] w-full" />
               <Skeleton className="h-4 w-48 mx-auto" />
             </div>
+          ) : orderStatus === "confirmed" || orderStatus === "paid" ? (
+            <div className="flex flex-col items-center justify-center p-8 space-y-4">
+              <CheckCircle2 className="h-16 w-16 text-emerald-600 dark:text-emerald-400" />
+              <div className="text-center space-y-2">
+                <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">
+                  ชำระเงินสำเร็จ
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  การชำระเงินของคุณได้รับการยืนยันแล้ว
+                </p>
+              </div>
+            </div>
           ) : qrData ? (
-            <QRCodeDisplay
-              qrcode={qrData.qrcode}
-              amount={amount}
-              transactionId={qrData.transactionId}
-            />
+            <div className="space-y-4">
+              <QRCodeDisplay
+                qrcode={qrData.qrcode}
+                amount={amount}
+                transactionId={qrData.transactionId}
+                isCheckingPayment={isCheckingPayment}
+              />
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center p-8">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -230,22 +327,41 @@ export function PaymentDialog({
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleClose} className="flex-1">
-            ปิด
-          </Button>
-          {qrData && (
+          {orderStatus === "confirmed" || orderStatus === "paid" ? (
             <Button
               onClick={() => {
-                clearStoredQRData(orderId);
-                setQrData(null);
-                generatedOrderIdRef.current = null;
-                generateQRCode();
+                if (orderDbId) {
+                  if (onPaymentSuccess) {
+                    onPaymentSuccess();
+                  } else {
+                    router.push(`/orders/${orderDbId}`);
+                  }
+                }
               }}
-              variant="outline"
               className="flex-1"
             >
-              สร้าง QR Code ใหม่
+              ไปที่ประวัติคำสั่งซื้อ
             </Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={handleClose} className="flex-1">
+                ปิด
+              </Button>
+              {qrData && (
+                <Button
+                  onClick={() => {
+                    clearStoredQRData(orderId);
+                    setQrData(null);
+                    generatedOrderIdRef.current = null;
+                    generateQRCode();
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  สร้าง QR Code ใหม่
+                </Button>
+              )}
+            </>
           )}
         </div>
       </DialogContent>

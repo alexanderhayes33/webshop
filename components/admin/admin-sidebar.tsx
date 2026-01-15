@@ -16,7 +16,8 @@ import {
   Truck,
   Notebook,
   Sparkles,
-  MessageCircle
+  MessageCircle,
+  CreditCard
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -94,7 +95,11 @@ export function AdminSidebar() {
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto p-4">
         {menuItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+          // สำหรับ /admin ต้องเช็ค exact match เท่านั้น
+          // สำหรับเมนูอื่นๆ เช็คว่า pathname ตรงกับ href หรือขึ้นต้นด้วย href + "/"
+          const isActive = item.href === "/admin" 
+            ? pathname === "/admin" || pathname === "/admin/"
+            : pathname === item.href || pathname.startsWith(item.href + "/");
           const isSettings = item.href === "/admin/settings";
           return (
             <div key={item.href}>
@@ -123,6 +128,19 @@ export function AdminSidebar() {
                     >
                       <MessageCircle className="h-3 w-3" />
                       LINE Login
+                    </Button>
+                  </Link>
+                  <Link href="/admin/settings/slipok">
+                    <Button
+                      variant={pathname === "/admin/settings/slipok" ? "default" : "ghost"}
+                      size="sm"
+                      className={cn(
+                        "w-full justify-start gap-2 text-xs",
+                        pathname === "/admin/settings/slipok" && "bg-primary text-primary-foreground"
+                      )}
+                    >
+                      <CreditCard className="h-3 w-3" />
+                      SlipOK Payment
                     </Button>
                   </Link>
                 </div>
