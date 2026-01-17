@@ -1,0 +1,21 @@
+ตั้งค่า Cloudflare สำหรับ app.vape168.com
+
+1. DNS Record:
+   - Type: A
+   - Name: app
+   - IPv4: 188.166.222.226
+   - Proxy: Proxied (เปิด)
+
+2. SSL/TLS:
+   - Mode: Full (strict)
+   - Always Use HTTPS: เปิด
+
+3. Firewall:
+   - ตั้งค่า WAF Rules ตามต้องการ
+
+4. Speed:
+   - Auto Minify: เปิด
+   - Brotli: เปิด
+
+หมายเหตุ: รอ 5-10 นาทีหลังตั้งค่า DNS
+
